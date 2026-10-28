@@ -42,6 +42,7 @@ app/
   admin/access/page.tsx
   admin/history/page.tsx
   admin/settings/page.tsx
+  robots.ts                          disallow all
   api/auth/session/route.ts
   api/guardian/route.ts
   api/upload/sign/route.ts
@@ -70,6 +71,7 @@ lib/
   validation/event.schema.ts  room.schema.ts  item.schema.ts  invite.schema.ts
   visits.ts
   audit.ts
+  security/origin.ts  headers.ts  urls.ts  paths.ts
   utils/cn.ts  format-date.ts
 docs/
   PRD.md  schema.md  agent-rules.md  decisions.md
@@ -100,6 +102,9 @@ File test berdampingan dengan sumbernya (`lib/visits.test.ts`), bukan di folder 
 | Unit test | `<nama-sumber>.test.ts` di samping sumbernya |
 | Workflow CI/CD | `.github/workflows/<nama>.yml` |
 | Penulisan audit log | `lib/audit.ts` (satu pintu, dipanggil dari repository) |
+| Cek Origin / header keamanan | `lib/security/` |
+| Normalisasi URL, `?next=`, dan path kunjungan | `lib/security/urls.ts`, `lib/security/paths.ts` |
+| `robots.txt` | `app/robots.ts` |
 
 ---
 
@@ -127,6 +132,19 @@ Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
 12. Mengubah `app/globals.css` di luar variabel tema dan utilitas yang sudah ditetapkan.
 13. Hardcode nama orang, tanggal, atau URL di komponen. Semua dari database atau env.
 14. Push langsung ke `main`, atau `git push --force` ke branch yang punya PR aktif.
+15. `dangerouslySetInnerHTML`, `eval`, `new Function`.
+16. `sql.raw()` atau `db.execute()` dengan string yang disusun dari input; interpolasi nama kolom dari request.
+17. Meneruskan URL mentah user ke `href`, `src`, atau `srcDoc` tanpa validasi `https` + host allowlist.
+18. Menyebar objek body request ke `insert`/`update`; setiap field dipetakan eksplisit setelah Zod `.strict()`.
+19. Menerima upload `image/svg+xml` atau HTML.
+20. Menjalankan `scripts/seed.ts` saat `NODE_ENV=production`.
+21. Mengubah data lewat `GET`, atau route handler mutasi tanpa `assertSameOrigin`.
+22. Menaruh `DATABASE_URL` produksi pada environment Preview Vercel.
+23. Auto-link caption/deskripsi atau merender markdown/HTML dari input user.
+24. `remotePatterns` wildcard atau `dangerouslyAllowSVG` pada `next/image`.
+25. Menyajikan file upload lewat domain aplikasi (`rewrite`, route handler, atau optimizer).
+26. `pull_request_target`, atau workflow yang memegang secret tanpa Actions yang di-pin ke SHA.
+27. OG image atau metadata dinamis yang membaca database.
 
 ---
 
@@ -196,8 +214,9 @@ Jangan menampilkan pesan error mentah dari database ke UI.
 2. buat page.tsx sebagai Server Component
 3. ambil data lewat repository
 4. pecah bagian interaktif jadi komponen 'use client'
-5. uji di 360 px dan 1440 px
-6. tulis unit test untuk logika murni yang lahir dari halaman itu
+5. pastikan halaman tidak membocorkan data DB ke publik; kalau publik, copy harus statis
+6. uji di 360 px dan 1440 px
+7. tulis unit test untuk logika murni yang lahir dari halaman itu
 ```
 
 ### 5.3 Menambah aksi yang perlu dicatat
@@ -225,6 +244,15 @@ Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
 - [ ] Semua query baca memfilter `deleted_at is null`
 - [ ] Setiap mutasi mengisi `updated_at` dan `updated_by`
 - [ ] Setiap mutasi data menulis `audit_logs` dalam transaksi yang sama
+- [ ] Route handler mutasi memanggil `assertSameOrigin` dan hanya menerima `POST`
+- [ ] Tidak ada URL mentah user di `href`/`src`/iframe; host sudah divalidasi
+- [ ] Halaman mengembalikan header keamanan `lib/security/headers.ts`
+- [ ] Tidak ada secret di `NEXT_PUBLIC_*`; `npm audit --omit=dev` bersih
+- [ ] `app/robots.ts` + `X-Robots-Tag` noindex terpasang; tidak ada halaman publik berisi data DB
+- [ ] Caption tidak di-auto-link dan tidak dirender sebagai HTML/markdown
+- [ ] `next/image` hanya host eksplisit; SVG tidak diizinkan
+- [ ] Tidak ada upload yang disajikan lewat domain aplikasi
+- [ ] Tidak ada workflow `pull_request_target`; Actions dengan secret di-pin ke SHA
 - [ ] Jika skema berubah: migrasi ada, `docs/schema.md` diperbarui
 - [ ] Jika route baru: aturan akses sesuai PRD §4 dan ditegakkan di server
 - [ ] Tampilan diuji di 360 px dan 1440 px, tanpa scroll horizontal
@@ -287,6 +315,10 @@ export default async function Page({ params }: { params: Promise<{ eventSlug: st
 }
 ```
 
+- `next.config.ts`: `poweredByHeader: false`; `images.remotePatterns` hanya host eksplisit (Cloudinary, R2, thumbnail YouTube); `dangerouslyAllowSVG: false`.
+- Jangan membuat `opengraph-image` yang membaca database.
+- `redirect()` hanya ke path internal hasil `safeNextPath()`.
+
 ### Tailwind 4
 
 - Tidak ada `tailwind.config.js`. Konfigurasi lewat CSS: `@import "tailwindcss";` lalu blok `@theme`.
@@ -305,24 +337,56 @@ export default async function Page({ params }: { params: Promise<{ eventSlug: st
 - Signature dihitung di server dengan `api_secret`. Jangan pernah mengirim secret ke client.
 - URL transformasi dibentuk di server atau lewat loader, bukan disimpan di DB (simpan `public_id` saja).
 - Foto iPhone bisa HEIC — pastikan URL memakai `f_auto` agar dikonversi.
+- Aktifkan **strict transformations**; signature menyertakan `allowed_formats`, `max_file_size`, folder tetap, dan `overwrite: false`.
+- `public_id` divalidasi regex sebelum dipakai membentuk URL transformasi.
 
 ### Cloudflare R2
 
 - Presigned PUT punya masa berlaku; jangan di-cache di client.
 - CORS bucket harus mengizinkan origin app, `PUT`, dan `GET`.
-- Key dibuat server: `events/{eventId}/{uuid}.{ext}`.
+- Key dibuat server: `events/{eventId}/{uuid}.{ext}`; ekstensi hanya dari allowlist media.
+- Presign mengunci `Content-Type`. `.html`, `.svg`, dan `.js` ditolak.
+- Bucket backup terpisah dan privat; token per bucket.
 
 ### Neon di Vercel
 
 - Pakai pooled connection (`-pooler` di hostname).
 - Jangan membuat instance `db` baru per request.
 - Autosuspend 5 menit: request pertama setelah idle lebih lambat. Jangan dianggap error.
+- Environment **Preview** memakai `DATABASE_URL` ke Neon branch; `DATABASE_URL` produksi dilarang di Preview (D-038).
 
 ### Auth
 
 - Semua akses lewat `lib/auth/index.ts`. Jangan mengimpor `firebase-admin` di komponen.
 - `requireRole()` dipanggil di Server Component/Action, bukan di client.
 - `middleware.ts` hanya untuk redirect, bukan satu-satunya pengecekan.
+
+### Keamanan
+
+```ts
+// lib/security/origin.ts
+export function assertSameOrigin(request: Request): void {
+  const origin = request.headers.get('origin');
+  if (!origin || origin !== new URL(request.url).origin) {
+    throw new Error('Origin tidak valid');
+  }
+}
+```
+
+- Route handler yang mengubah state: `POST` saja, `content-type: application/json`, panggil `assertSameOrigin` paling awal.
+- Cookie sesi: `__Host-olu_session`, `httpOnly`, `secure`, `sameSite=lax`, umur 5 hari, ditandatangani `SESSION_SECRET`.
+- `?next=` hanya path internal, divalidasi lewat `new URL(next, origin)` dan perbandingan `origin` (bukan awalan `//`).
+- URL lagu/media hanya `https` dengan host allowlist; embed dibentuk server.
+- Jangan mencatat token, cookie, atau secret ke log/audit.
+- Header keamanan dari `lib/security/headers.ts`; CSP report-only dulu, enforce di M8.
+- `app/robots.ts` + `X-Robots-Tag` noindex di semua respons. Situs ini tidak boleh muncul di pencarian.
+- Landing `/` hanya memakai status `gate_open`; copy, judul, dan metadata statis. Tidak ada data event/guardian di halaman publik.
+- Caption dan deskripsi adalah teks biasa. Tanpa markdown, HTML, atau auto-link.
+- Media selalu dari origin Cloudinary/R2; jangan pernah menyajikannya lewat domain aplikasi.
+- `safeNextPath()` memakai `new URL(next, origin)` dan membandingkan `origin`, bukan cek awalan string.
+- `normalizeVisitPath()` meredaksi segmen dinamis sensitif: `/invite/[redacted]`.
+- Preview deployment terlindungi Vercel Authentication; jangan menguji login Firebase di preview.
+- Tidak ada OG image dinamis; crawler tidak boleh membaca database.
 
 ---
 
