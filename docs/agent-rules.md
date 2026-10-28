@@ -1,0 +1,310 @@
+# Aturan Kerja AI Agent — Our Little Universe
+
+Dokumen ini adalah kontrak kerja untuk AI agent (dan manusia) yang mengubah repo ini.
+Baca file ini **sebelum** menulis kode.
+
+Urutan baca yang disarankan:
+1. `docs/agent-rules.md` (file ini)
+2. `docs/PRD.md` bagian 3, 4, 7
+3. `docs/schema.md` bagian 3 dan 4
+4. `lib/db/schema.ts`
+
+---
+
+## 1. Prinsip
+
+1. **Skema adalah sumber kebenaran.** Kalau kode dan skema bertentangan, skema menang.
+2. **Satu pintu per tanggung jawab.** Database lewat `lib/db/repositories/`, auth lewat `lib/auth/`, pencatatan history lewat `lib/visits.ts`, media lewat `lib/media/`.
+3. **Server yang memutuskan.** Role, kuota, dan validasi tidak pernah hanya di client.
+4. **Ubah sesedikit mungkin.** Jangan refactor file yang tidak berkaitan dengan tugas.
+5. **Kalau ragu, berhenti dan tanya.** Lebih baik satu pertanyaan daripada satu migrasi yang salah.
+
+---
+
+## 2. Struktur File
+
+```
+app/
+  (public)/page.tsx                  gate
+  (auth)/login/page.tsx
+  (auth)/invite/[code]/page.tsx
+  (app)/[eventSlug]/page.tsx
+  (app)/[eventSlug]/[roomKey]/page.tsx
+  (app)/[eventSlug]/connect/page.tsx
+  admin/layout.tsx
+  admin/page.tsx
+  admin/events/page.tsx
+  admin/events/[id]/page.tsx
+  admin/events/[id]/rooms/[roomId]/page.tsx
+  admin/media/page.tsx
+  admin/access/page.tsx
+  admin/history/page.tsx
+  admin/settings/page.tsx
+  api/auth/session/route.ts
+  api/guardian/route.ts
+  api/upload/sign/route.ts
+  api/upload/r2/presign/route.ts
+  api/notify/telegram/route.ts
+components/
+  ui/gift-card.tsx
+  ui/badge.tsx
+  ui/button.tsx
+  ui/countdown.tsx
+  ui/empty-state.tsx
+  ambient-background.tsx
+  guardian-status.tsx
+  room-grid.tsx
+  admin/kpi-card.tsx
+  admin/timeline-table.tsx
+  admin/item-form.tsx
+lib/
+  auth/index.ts  firebase.ts  session.ts  guard.ts
+  db/index.ts  schema.ts
+  db/repositories/events.ts  rooms.ts  items.ts  visits.ts
+                   users.ts  invites.ts  settings.ts
+  media/cloudinary.ts  r2.ts  image-loader.ts
+  validation/event.schema.ts  room.schema.ts  item.schema.ts  invite.schema.ts
+  visits.ts
+  utils/cn.ts  format-date.ts
+docs/
+  PRD.md  schema.md  agent-rules.md  decisions.md
+drizzle/
+scripts/
+  seed.ts  backup.ts
+middleware.ts
+```
+
+### Aturan penempatan
+
+| Butuh | Taruh di |
+|---|---|
+| Query database | `lib/db/repositories/<entity>.ts` |
+| Validasi input | `lib/validation/<entity>.schema.ts` (Zod) |
+| Mutasi dari form | Server Action di file route atau `actions.ts` di folder route |
+| Endpoint yang dipanggil client | `app/api/**/route.ts` |
+| Komponen visual | `components/` |
+| Logika auth | `lib/auth/` |
+
+---
+
+## 3. Larangan Keras
+
+Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
+
+1. `DELETE FROM visits` atau `UPDATE visits SET ...` selain kolom `visible`.
+2. `ALTER TABLE` manual di Neon console / psql.
+3. Mengedit file di `drizzle/` secara manual.
+4. Menaruh secret di file yang masuk git (`.env` wajib di `.gitignore`).
+5. Mengimpor `db` di komponen atau page:
+   ```ts
+   // SALAH
+   import { db } from '@/lib/db';
+   // BENAR
+   import { getEventBySlug } from '@/lib/db/repositories/events';
+   ```
+6. Upload media tanpa verifikasi sesi di server.
+7. Memakai unsigned Cloudinary preset.
+8. `any`, `as unknown as`, `@ts-ignore`, `@ts-expect-error` (kecuali dengan komentar alasan).
+9. `use client` di `page.tsx` atau `layout.tsx` — hanya di komponen daun.
+10. `console.log` di kode yang di-deploy. Pakai `console.error` hanya di blok `catch`.
+11. Menambah dependency baru tanpa mencatat alasan di `docs/decisions.md`.
+12. Mengubah `app/globals.css` di luar variabel tema dan utilitas yang sudah ditetapkan.
+13. Hardcode nama orang, tanggal, atau URL di komponen. Semua dari database atau env.
+
+---
+
+## 4. Konvensi Kode
+
+### Penamaan
+
+| Jenis | Gaya | Contoh |
+|---|---|---|
+| Komponen | PascalCase | `RoomGrid.tsx` |
+| Hook | `use` + PascalCase | `useGuardian.ts` |
+| Fungsi repository | `verbNoun` | `getEventBySlug`, `listRoomItems`, `createItem` |
+| Server Action | `verbNounAction` | `createItemAction` |
+| Skema Zod | camelCase + `Schema` | `createItemSchema` |
+| Tabel/kolom DB | snake_case | `created_at` |
+| File di `app/` | kebab-case | `room-grid.tsx` (kalau perlu) |
+
+### Tipe
+
+- Tipe didapat dari Drizzle (`typeof items.$inferSelect`) atau dari Zod (`z.infer<typeof schema>`).
+- Jangan mendefinisikan ulang tipe yang sudah ada.
+- Semua fungsi publik punya tipe balik eksplisit.
+
+### Komponen
+
+- Server Component sebagai default.
+- `'use client'` hanya untuk: state, event handler, `useEffect`, browser API.
+- Data fetching di Server Component lewat repository, bukan `fetch` ke API sendiri.
+- Props selalu bertipe; tidak ada `props: any`.
+
+### Error
+
+```ts
+// pola yang dipakai
+try {
+  // ...
+} catch (err) {
+  console.error('[createItem]', err);
+  throw new Error('Gagal menyimpan item');
+}
+```
+Jangan menampilkan pesan error mentah dari database ke UI.
+
+---
+
+## 5. Alur Kerja Standar
+
+### 5.1 Menambah field ke tabel
+
+```
+1. ubah lib/db/schema.ts
+2. npx drizzle-kit generate
+3. BACA file SQL yang dihasilkan di drizzle/
+4. npx drizzle-kit migrate
+5. perbarui docs/schema.md (DDL + kamus data)
+6. perbarui lib/validation/*.schema.ts
+7. perbarui repository terkait
+8. npm run typecheck && npm run lint && npm run build
+```
+
+### 5.2 Menambah halaman
+
+```
+1. tentukan route + siapa yang boleh akses (PRD §4)
+2. buat page.tsx sebagai Server Component
+3. ambil data lewat repository
+4. pecah bagian interaktif jadi komponen 'use client'
+5. uji di 360 px dan 1440 px
+```
+
+### 5.3 Menambah aksi yang perlu dicatat
+
+```
+1. tentukan nilai enum (tambah ke visitAction kalau perlu + migrasi)
+2. panggil logVisit() dari server, satu tempat
+3. pastikan tidak ada duplikasi dalam 60 detik
+```
+
+---
+
+## 6. Definisi Selesai (Definition of Done)
+
+Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
+
+- [ ] `npm run typecheck` hijau
+- [ ] `npm run lint` hijau
+- [ ] `npm run build` hijau
+- [ ] Tidak ada `any` baru
+- [ ] Tidak ada query database di luar `lib/db/repositories/`
+- [ ] Jika skema berubah: migrasi ada, `docs/schema.md` diperbarui
+- [ ] Jika route baru: aturan akses sesuai PRD §4 dan ditegakkan di server
+- [ ] Tampilan diuji di 360 px dan 1440 px, tanpa scroll horizontal
+- [ ] Fokus keyboard terlihat pada elemen interaktif baru
+- [ ] `prefers-reduced-motion` tidak memicu animasi
+- [ ] Tidak ada secret baru yang masuk client bundle
+
+---
+
+## 7. Perintah
+
+```bash
+npm run dev            # dev server
+npm run typecheck      # tsc --noEmit
+npm run lint           # eslint
+npm run build          # production build
+
+npm run db:generate    # drizzle-kit generate
+npm run db:migrate     # drizzle-kit migrate
+npm run db:studio      # drizzle-kit studio
+npm run db:seed        # tsx scripts/seed.ts
+```
+
+Semua perintah ini harus ada di `package.json` sejak M1.
+
+---
+
+## 8. Batasan Teknis yang Sering Salah
+
+### Next.js 15
+
+`params` dan `searchParams` adalah **Promise**:
+```ts
+export default async function Page({ params }: { params: Promise<{ eventSlug: string }> }) {
+  const { eventSlug } = await params;
+}
+```
+
+### Responsif
+
+- `100vh` dilarang. Pakai `100dvh` atau Tailwind `min-h-dvh`.
+- Jangan pakai `overflow: hidden` di `body` — pakai `overflow-x: clip`.
+- Animasi ambient wajib `position: fixed`, `pointer-events: none`, `z-index: -1`.
+- Input wajib `font-size: 16px` untuk mencegah zoom otomatis di iOS Safari.
+
+### Cloudinary
+
+- Signature dihitung di server dengan `api_secret`. Jangan pernah mengirim secret ke client.
+- URL transformasi dibentuk di server atau lewat loader, bukan disimpan di DB (simpan `public_id` saja).
+- Foto iPhone bisa HEIC — pastikan URL memakai `f_auto` agar dikonversi.
+
+### Cloudflare R2
+
+- Presigned PUT punya masa berlaku; jangan di-cache di client.
+- CORS bucket harus mengizinkan origin app, `PUT`, dan `GET`.
+- Key dibuat server: `events/{eventId}/{uuid}.{ext}`.
+
+### Neon di Vercel
+
+- Pakai pooled connection (`-pooler` di hostname).
+- Jangan membuat instance `db` baru per request.
+- Autosuspend 5 menit: request pertama setelah idle lebih lambat. Jangan dianggap error.
+
+### Auth
+
+- Semua akses lewat `lib/auth/index.ts`. Jangan mengimpor `firebase-admin` di komponen.
+- `requireRole()` dipanggil di Server Component/Action, bukan di client.
+- `middleware.ts` hanya untuk redirect, bukan satu-satunya pengecekan.
+
+---
+
+## 9. Hemat Konteks (untuk AI)
+
+1. Jangan membaca seluruh repo. Baca `@file` yang relevan saja.
+2. Sebelum mencari fungsi, cek `lib/db/repositories/` dan `lib/auth/` lebih dulu.
+3. Kalau butuh mengubah pola yang dipakai di banyak tempat, tanyakan dulu — jangan refactor massal tanpa izin.
+4. Jangan menulis ulang file utuh untuk perubahan kecil. Gunakan edit terarah.
+5. Jangan menjalankan `npm run build` berkali-kali; jalankan sekali di akhir.
+6. Jangan membuat file dokumentasi baru. Perbarui yang sudah ada.
+
+---
+
+## 10. Format Commit
+
+```
+feat(admin): tambah form edit item
+fix(auth): cegah redirect loop pada sesi kedaluwarsa
+chore(db): migrasi kolom duration_s
+docs(schema): perbarui kamus data items
+refactor(repo): satukan query room ke satu fungsi
+```
+
+Satu commit = satu tujuan. Jangan gabungkan migrasi dengan perubahan UI.
+
+---
+
+## 11. Saat Tidak Yakin
+
+Tanyakan, dengan format:
+
+```
+Konteks  : <apa yang sedang dikerjakan>
+Masalah  : <apa yang membingungkan>
+Opsi A   : <konsekuensi>
+Opsi B   : <konsekuensi>
+Saran    : <pilihan + alasan>
+```
+
+Jangan mengambil keputusan yang mengubah skema, biaya, atau hak akses tanpa persetujuan Ian.
