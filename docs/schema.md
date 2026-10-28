@@ -21,6 +21,8 @@ Aturan utama: **tidak ada perubahan skema tanpa migrasi Drizzle.** `ALTER TABLE`
 8. **Kolom audit wajib** di setiap tabel: `created_at`, `updated_at`, `updated_by`, ditambah `deleted_at`, `deleted_by` pada tabel yang bisa dihapus. Pengecualian append-only: `audit_logs` hanya punya `created_at`.
 9. **`settings` hanya untuk data global** (gate, notifikasi, guardian) — bukan tempat menyimpan relasi.
 10. **Setiap mutasi data dicatat** ke `audit_logs` (append-only), terpisah dari `visits` yang mencatat kunjungan.
+11. **URL dan jalur disimpan ternormalisasi.** Hanya `https` dengan host allowlist; `visits.path` tanpa query/hash dan diredaksi.
+12. **Path tidak menyimpan rahasia.** Kode invite tidak pernah masuk `visits.path`, log, atau pesan error.
 
 ---
 
@@ -167,7 +169,7 @@ create table visits (
   event_id     uuid references events(id) on delete set null,
   room_id      uuid references rooms(id) on delete set null,
   action       visit_action not null,
-  path         text,
+  path         text,   -- ternormalisasi: tanpa query/hash; /invite/{code} → /invite/[redacted]
   user_agent   text,
   visible      boolean not null default true,
   created_at   timestamptz not null default now(),
@@ -488,7 +490,7 @@ export const auditLogs = pgTable(
 | `type` | `photo` / `video` / `song` / `text` |
 | `provider` | `cloudinary` (foto), `r2` (video), `youtube`/`spotify` (embed), `none` (teks) |
 | `public_id` | ID Cloudinary, dipakai untuk membentuk URL transformasi |
-| `url` | URL final untuk R2 / embed / teks |
+| `url` | URL final untuk R2 / embed / teks; hanya `https` dengan host allowlist (D-035) |
 | `thumb_url` | Poster video hasil frame pertama (Cloudinary) |
 | `song_provider` | Provider lagu tempelan; `none` = tidak ada lagu |
 | `song_url` | URL Spotify/YouTube lagu tempelan |
@@ -504,6 +506,7 @@ Untuk `type = 'song'`, lagu disimpan di `provider`/`url` dan `song_*` dibiarkan 
 | Kolom | Keterangan |
 |---|---|
 | `session_hash` | `sha256(uid + ':' + YYYY-MM-DD)` — hitung unik tanpa menyimpan IP |
+| `path` | Path ternormalisasi: tanpa query/hash, dan segmen dinamis sensitif di-redact (`/invite/[redacted]`) |
 | `visible` | `false` = disembunyikan dari UI, **tetap ada di DB** |
 | `action` | Enum, lihat §3 |
 
@@ -638,6 +641,12 @@ limit 50;
 | Lagu tempelan | Maks satu per item; `song_url` wajib host `open.spotify.com` atau `youtube.com`/`youtu.be` |
 | Upload | Hanya `owner`/`editor`; maks 500 MB per file video, dicek di server |
 | File media saat item dihapus | **Tidak** dihapus dari Cloudinary/R2 (keputusan D-018) |
+| Media disalahgunakan | Boleh dihapus manual dari dashboard provider; bukan hard delete baris database |
+| `visits.path` | Path ternormalisasi: tanpa query/hash; `/invite/{code}` disimpan sebagai `/invite/[redacted]` |
+| Kode invite | Tidak pernah ditulis ke `visits.path`, log, atau pesan error |
+| URL media | `items.url` dan `song_url` hanya `https` dengan host allowlist; embed dibentuk server dari ID tervalidasi |
+| Kode invite | Minimal 8 karakter acak (bukan kata kamus); disimpan apa adanya, hanya ditampilkan sekali saat dibuat |
+| Input tulis | Zod `.strict()` lalu dipetakan eksplisit per field; body request tidak pernah disebar ke `insert`/`update` |
 | Audit log | Setiap `create`/`update`/`soft_delete`/`restore` menulis `audit_logs` dalam transaksi yang sama, lewat `lib/audit.ts` |
 | Audit tidak diubah | `audit_logs` append-only: dilarang `UPDATE` dan `DELETE` |
 
@@ -701,6 +710,8 @@ on conflict (email) where deleted_at is null do nothing;
 | User | aktif + terhapus | Dump harian |
 
 `scripts/backup.ts` dijalankan GitHub Action (cron harian). Format: JSON per tabel + satu CSV untuk `visits`. File media **tidak** ikut di-dump; yang dijamin hanya baris database.
+
+Bucket backup **terpisah** dari bucket media: prefix dump tidak boleh dapat diakses lewat `R2_PUBLIC_BASE`, tidak ada public bucket, dan key-nya tidak pernah ditulis ke client.
 
 ---
 

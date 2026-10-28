@@ -1,6 +1,6 @@
 # PRD — Our Little Universe
 
-**Versi:** 2.3
+**Versi:** 2.5
 **Status:** Final — siap implementasi
 **Pemilik:** Ian
 **Update terakhir:** 2026-10-28
@@ -14,7 +14,7 @@
 
 | Item | Isi |
 |---|---|
-| Apa ini | Website personal berisi "ruang" kenangan (foto, video, surat, lagu) yang bisa diisi terus-menerus oleh pemiliknya |
+| Apa ini | Website personal berisi "ruang" kenangan (foto, video, teks, lagu) yang bisa diisi terus-menerus oleh pemiliknya |
 | Untuk siapa | Ian (owner) dan orang-orang yang diundang (guest) |
 | Masalah yang diselesaikan | Project lama hanya kerangka: 3 halaman statis, tanpa konten, dan tidak ada cara menambah isi tanpa mengedit kode |
 | Prinsip utama | Bisa dirawat 2–3 tahun oleh satu orang non-desainer, dengan AI sebagai rekan implementasi |
@@ -56,16 +56,19 @@ Dibuang:
 - Unit test (Vitest) untuk logika murni, wajib hijau di CI.
 - Audit log perubahan data (append-only), terpisah dari history kunjungan.
 - CI GitHub Actions + proteksi `main`: tidak ada push langsung, semua lewat PR.
+- Seluruh situs `noindex`; landing publik hanya copy statis + status gate.
 
 ### 2.2 Di luar v1.0
 
-- Komentar, chat, reaksi emoji.
+- Komentar, chat, reaksi emoji, guestbook, form kontak.
+- Halaman publik yang menampilkan isi event/room (termasuk OG image dinamis).
 - Multi-tenant (banyak pasangan dalam satu instalasi).
 - Pembayaran.
 - Email transaksional.
 - Aplikasi mobile native.
 - Kompresi/transcoding video (browser maupun server) — video ditampilkan apa adanya.
 - Upload media oleh `guest`.
+- Iklan, ad network, tag manager, atau script pihak ketiga selain GA4.
 
 ---
 
@@ -154,6 +157,8 @@ Guest buka link → login → POST redeem
 ```
 
 Redeem dicatat sebagai `invite_redeem` di `visits`.
+
+Halaman `/invite/[code]` sebelum login hanya menampilkan copy generik dan tombol login. Tidak ada judul event, nama owner, atau detail undangan dari database yang dirender ke publik. Validasi kode terjadi di server setelah sesi ada.
 
 ### 5.3 Guardian Connect
 
@@ -262,7 +267,7 @@ Desktop ≥1024px                     Mobile <1024px
 
 | Layar | Kriteria |
 |---|---|
-| Gate | Kartu `max-w-md`; tombol disabled + pesan jelas saat gate tutup; tanpa scroll horizontal di 360 px |
+| Gate | Kartu `max-w-md`; tombol disabled + pesan jelas saat gate tutup; tanpa scroll horizontal di 360 px; **copy statis**, hanya status buka/tutup dari DB |
 | User home | Sidebar sticky tidak menutupi konten; grid 1/2/3 kolom; bottom nav mobile tidak menutupi item terakhir (`pb-24`) |
 | Room | Video `preload="metadata"` + poster; gambar `srcset` 3 ukuran; lightbox bisa ditutup dengan Esc |
 | Admin | Tabel boleh horizontal-scroll di dalam wrapper sendiri, bukan seluruh halaman |
@@ -311,7 +316,10 @@ Breakpoint uji wajib: 360, 390, 430, 768, 1024, 1440.
 - Key R2 dibuat server: `events/{eventId}/{uuid}.{ext}` — mencegah path traversal.
 - R2 butuh CORS: `AllowedOrigins: [domain app]`, `AllowedMethods: [PUT, GET]`, `AllowedHeaders: [*]`.
 - Tanpa domain kustom, bucket diakses lewat `https://pub-xxxx.r2.dev`.
+- **Media tidak pernah diproksikan lewat domain aplikasi.** Tidak ada `rewrite`, route handler, atau image optimizer yang menyajikan file upload dari origin sendiri. Cloudinary/R2 tetap origin terpisah.
+- Presign R2 dan signature Cloudinary mengunci `Content-Type` + ekstensi dari allowlist (jpg, png, webp, heic, mp4, mov). `.html`, `.svg`, dan `.js` ditolak.
 - Menghapus item **tidak** menghapus file di Cloudinary/R2. Pembersihan aset dilakukan manual dari dashboard provider.
+- Pengecualian: media yang terbukti disalahgunakan (spam/judol/phishing) **boleh dihapus manual** dari dashboard provider. Ini tidak melanggar aturan soft delete aplikasi karena tidak menyentuh baris database.
 - Semua guest melihat video setelah login app; tautan YouTube tidak meminta akun Google.
 
 ### 8.2 Rencana pertumbuhan video
@@ -405,17 +413,35 @@ order by 1 desc;
 | Risiko | Mitigasi |
 |---|---|
 | Guest membuka ruangan terlarang | Cek `min_role` di repository (server), bukan di komponen |
+| IDOR / akses lintas event | Semua query di-scope ke event + role di repository; ID entitas dari client tidak dipercaya |
+| SQL injection | Drizzle memparameterisasi nilai; `sql.raw` dilarang; sort/filter hanya dari whitelist enum |
 | Upload tidak sah | Hanya `owner`/`editor`; cek role di route handler sebelum presign |
 | File kebesaran | Batas 500 MB per file video, dicek di server |
+| Upload berbahaya (SVG/HTML) | Tolak `image/svg+xml` dan HTML; `allowed_formats` di signature Cloudinary; presign R2 mengunci content-type |
 | Secret bocor | `*_SECRET`, `PRIVATE_KEY`, `BOT_TOKEN` hanya di env server (tanpa `NEXT_PUBLIC_`) |
 | Path traversal R2 | Key dibuat server, bukan dari nama file client |
 | Koneksi Postgres habis | Pooled `DATABASE_URL`, satu instance `db` |
 | Backup hilang | Cron harian ke R2 |
-| Session dicuri | Cookie `httpOnly`, `secure`, `sameSite=lax`, ditandatangani `SESSION_SECRET`, umur 5 hari |
+| Session dicuri | Cookie `__Host-olu_session`, `httpOnly`, `secure`, `sameSite=lax`, ditandatangani `SESSION_SECRET`, umur 5 hari |
+| CSRF | `sameSite=lax`; Server Actions memeriksa Origin; `/api/**` yang mengubah state wajib `assertSameOrigin` dan POST |
+| XSS | React meng-escape teks; `dangerouslySetInnerHTML` dilarang; URL divalidasi (https + host allowlist); CSP bertahap |
+| Open redirect | `?next=` divalidasi dengan `new URL(next, origin)`; `origin` harus sama, bukan cek awalan string |
+| Mass assignment | Zod `.strict()` + pemetaan field eksplisit; body request tidak pernah disebar ke `insert`/`update` |
 | Penghapusan tidak sengaja | Soft delete + `deleted_by`; pulihkan lewat SQL manual oleh owner |
 | Media yatim | Diterima (D-018); pembersihan manual di dashboard Cloudinary/R2 |
 | Perubahan data tanpa jejak | Setiap mutasi menulis `audit_logs` dengan `before`/`after` dan `actor_id` |
 | Log diubah atau dihapus | `audit_logs` append-only; tidak ada endpoint update/delete |
+| PII di audit log | Hanya `owner`/`editor` yang bisa membaca; secret tidak pernah dicatat |
+| Seed jadi backdoor | Seed menolak jalan saat `NODE_ENV=production`; invite demo hanya dibuat di dev |
+| Preview mengubah data produksi | `DATABASE_URL` environment Preview wajib Neon branch, bukan database produksi |
+| Brute force invite/upload | Batas percobaan dihitung dari database per `session_hash`, bukan variabel memori |
+| Dependency berbahaya | Versi dikunci persis, `npm ci`, `npm audit --omit=dev` di CI, dependency baru lewat `decisions.md` |
+| Injeksi spam/judol lewat konten | Guest read-only; landing statis; caption tanpa auto-link/HTML; link keluar hanya allowlist; seluruh situs `noindex` |
+| Preview dipakai hosting phishing | Standard Protection + Vercel Authentication untuk semua deployment non-produksi |
+| Media dipakai host phishing | Origin terpisah dari aplikasi, `Content-Type`/ekstensi dikunci, SVG/HTML ditolak, bisa dihapus manual dari provider |
+| Secret dicuri saat build | `npm ci --ignore-scripts` (diuji), Actions pin SHA + `permissions` minimal, secret tidak masuk log |
+
+Rincian implementasi, aturan cookie, dan tabel verifikasi ada di **§18 Model Keamanan**.
 
 ---
 
@@ -438,14 +464,14 @@ order by 1 desc;
 
 | M | Isi | Definisi selesai |
 |---|---|---|
-| M1 | Scaffold, Tailwind, layout B/C, ambient layer, Vitest, CI | Halaman kosong responsif di 360 & 1440; `npm run build` dan `npm run test:run` hijau |
+| M1 | Scaffold, Tailwind, layout B/C, ambient layer, Vitest, CI, header keamanan + robots/noindex | Halaman kosong responsif di 360 & 1440; `npm run build` dan `npm run test:run` hijau; header §18.4 + `Disallow: /` terpasang |
 | M2 | Drizzle schema + migrasi + seed + repository + unit test logika + `lib/audit.ts` | `npm run db:migrate` jalan; seed menghasilkan 1 event + 4 room; semua query filter `deleted_at` |
-| M3 | Auth (`lib/auth/`) + middleware + login/invite | Guest bisa masuk via invite; owner bisa masuk |
+| M3 | Auth (`lib/auth/`) + middleware + login/invite | Guest bisa masuk via invite; owner bisa masuk; cookie `__Host-` aktif; `/invite/CODE` tidak tercatat mentah di `visits` |
 | M4 | CRUD event/room/item + halaman user + kartu lagu | Konten tampil di user dan bisa diedit di admin; hapus = soft delete + audit |
 | M5 | Upload Cloudinary + R2 + poster canvas | Foto HEIC dari iPhone tampil di Chrome Android |
 | M6 | Visits + dashboard history + statistik + tab perubahan | Aksi tercatat; data tidak bisa dihapus dari UI |
 | M7 | Gate toggle + notifikasi Telegram | Gate berubah; pesan masuk ke Telegram |
-| M8 | PWA + polish + a11y | Terinstal di iPhone 13 & Android; Lighthouse ≥ 90 |
+| M8 | PWA + polish + a11y + CSP enforcement | Terinstal di iPhone 13 & Android; Lighthouse ≥ 90; CSP aktif tanpa pelanggaran |
 
 Urutan wajib: **M1 → M2 → M3**. M4–M8 boleh paralel setelahnya.
 
@@ -474,11 +500,13 @@ TELEGRAM_BOT_TOKEN=                         # server only
 NEXT_PUBLIC_GA_ID=
 ```
 
+`DATABASE_URL` di environment Preview Vercel wajib menunjuk Neon branch (D-038), bukan database produksi.
+
 ---
 
 ## 15. Keputusan Final
 
-Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-034).**
+Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-040).**
 
 | Topik | Keputusan |
 |---|---|
@@ -495,6 +523,8 @@ Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap:
 | Repo & proteksi | Publik; tidak ada push langsung ke `main`; wajib PR + CI hijau |
 | Testing | Vitest, coverage `lib/` ≥ 80%, wajib hijau di CI |
 | Audit log | Setiap mutasi data dicatat di `audit_logs` (append-only, `before`/`after`) |
+| Keamanan | Header wajib, cookie `__Host-`, cek Origin, tanpa seed produksi, CSP bertahap |
+| Anti-penyalahgunaan | Seluruh situs `noindex`; landing statis; preview terautentikasi; tanpa auto-link/rich text; media tidak diproksikan |
 
 ---
 
@@ -510,6 +540,7 @@ Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap:
 | Media yatim | File menumpuk permanen di R2/Cloudinary | Diterima (D-018); bersihkan manual dari dashboard provider |
 | Baris soft-deleted menumpuk | Ruang DB 0,5 GB terpakai | Pantau; arsip manual saat mendekati batas |
 | AI menulis di luar pola | Kode berantakan | `docs/agent-rules.md` |
+| Situs disusupi dan dipakai spam judol | Nama domain tercemar, konten privat bocor | Noindex total, landing statis, guest read-only, allowlist link, preview terautentikasi, playbook insiden §18.11 |
 
 ---
 
@@ -549,6 +580,13 @@ Aturan CI:
 - `npx drizzle-kit generate` dilanjutkan `git diff --exit-code drizzle/` — PR gagal jika skema berubah tanpa migrasi.
 - **Build tidak boleh menyentuh database.** Halaman yang membaca gate wajib `dynamic`; nilai `NEXT_PUBLIC_*` diisi dummy saat CI.
 - Migrasi **tidak** dijalankan otomatis saat merge; SQL hasil generate wajib dibaca lebih dulu.
+- `npm audit --omit=dev --audit-level=high` — PR gagal jika ada kerentanan `high`.
+- Pemindaian pola secret: gagal jika `NEXT_PUBLIC_*.{SECRET,TOKEN,PRIVATE}` atau `BOT_TOKEN` muncul di kode client.
+- Actions di-pin ke **commit SHA**, bukan tag; `permissions: contents: read`; `pull_request_target` dilarang.
+- Install memakai `npm ci --ignore-scripts`. Jika ada dependency yang benar-benar butuh postinstall, allowlist eksplisit di `decisions.md`.
+- Build CI hanya memakai `NEXT_PUBLIC_*` dummy; secret server tidak pernah tersedia saat build.
+- Build Vercel memakai `installCommand` di `vercel.json`: `npm ci --ignore-scripts`.
+- Preview deployment memakai Vercel Authentication (Standard Protection); tidak ada preview publik.
 
 ### 17.4 Unit test
 
@@ -562,6 +600,9 @@ Runner **Vitest** + Testing Library, environment `node` (komponen memakai docblo
 | URL builder Cloudinary, key R2, batas 500 MB | |
 | `format-date` Asia/Jakarta | |
 | `lib/audit.ts` — bentuk payload `before`/`after`, penolakan field rahasia | |
+| `lib/security/` — `assertSameOrigin`, validasi `?next=`, whitelist sort/filter, allowlist host URL | |
+| `normalizeVisitPath` — redaksi `/invite/[code]`, buang query/hash | |
+| `robots`/header `noindex` terbentuk dari satu sumber | |
 | komponen UI kecil dan `song-card` | |
 
 - Threshold coverage: **80% baris & fungsi** untuk `lib/` dan `components/`; `app/` dikecualikan.
@@ -574,14 +615,196 @@ Integrasi Git Vercel, tanpa pipeline deploy sendiri:
 
 | Kejadian | Hasil |
 |---|---|
-| PR dibuka/diupdate | preview deployment |
+| PR dibuka/diupdate | preview deployment, terlindungi Vercel Authentication |
 | Merge ke `main` | production deployment |
 
 ### 17.6 Rahasia
 
 GitHub Actions: `DATABASE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
 Vercel: seluruh variabel §14, dipisah Production dan Preview. Secret tidak pernah masuk `NEXT_PUBLIC_*`.
+`DATABASE_URL` di environment **Preview wajib menunjuk Neon branch**, bukan database produksi (D-038).
 
 ### 17.7 Anggaran
 
 Semua komponen CI/CD di atas gratis: Actions tanpa batas menit untuk repo publik, Vercel Hobby, Neon Free, R2 Free, Cloudinary Free, Firebase Spark.
+
+---
+
+## 18. Model Keamanan
+
+### 18.1 Prinsip
+
+1. **Server yang memutuskan.** Role, kepemilikan, dan validasi tidak pernah hanya di client.
+2. **Input tidak dipercaya.** Semua input lewat Zod `.strict()`, lalu dipetakan eksplisit ke field DB.
+3. **Deny by default.** Route baru tidak dapat diakses sampai aturan role-nya didefinisikan.
+4. **Gagal tertutup.** Error mengembalikan pesan generik, bukan detail database.
+5. **Tidak ada jalur rahasia.** Tidak ada endpoint debug, akun hardcode, atau bypass berbasis query param.
+
+### 18.2 SQL injection
+
+- Drizzle mengikat nilai sebagai parameter; jangan pernah menyusun SQL dengan string.
+- Dilarang: `sql.raw()` dengan input, `db.execute()` berisi string dinamis, interpolasi nama kolom dari request.
+- Kolom pengurutan dan filter hanya dari **whitelist enum** yang didefinisikan di kode.
+- Repository hanya menerima parameter bertipe, tidak menerima fragmen SQL.
+
+### 18.3 CSRF
+
+- Cookie sesi `sameSite=lax` — POST lintas situs tidak membawa cookie.
+- Server Actions memakai pemeriksaan Origin/Host bawaan Next; jangan menggantinya dengan route handler tanpa alasan.
+- Setiap route handler `/api/**` yang mengubah state:
+  - hanya menerima `POST`,
+  - `content-type: application/json`,
+  - memanggil `assertSameOrigin(request)` sebelum logika apa pun.
+- Tidak ada mutasi lewat `GET`.
+
+### 18.4 XSS dan CSP
+
+- React meng-escape teks. `dangerouslySetInnerHTML`, `eval`, `new Function` dilarang.
+- URL dari user divalidasi: skema `https` saja, host harus `open.spotify.com`, `youtube.com`, `youtu.be`, atau domain Cloudinary/R2.
+- Embed dibentuk di server dari ID tervalidasi, bukan dari URL mentah.
+- `public_id` Cloudinary divalidasi regex sebelum membentuk URL transformasi.
+- Header wajib sejak M1: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy: same-origin`, `Permissions-Policy` minimal (kamera, mikrofon, lokasi mati), serta `X-Robots-Tag` noindex.
+- Respons yang membawa sesi memakai `Cache-Control: no-store`.
+- CSP bertahap: `Content-Security-Policy-Report-Only` di M6, enforcement di M8 dengan nonce. Sumber yang diizinkan: self, Cloudinary, `pub-*.r2.dev`, `youtube.com`, `open.spotify.com`, GA4.
+
+### 18.5 Otorisasi dan backdoor
+
+- `requireRole()` dipanggil di setiap Server Component/Action yang menulis, dan di route handler sebelum presign.
+- Middleware hanya untuk redirect; bukan satu-satunya pengecekan.
+- `OWNER_EMAIL` hanya mempromosikan user yang sudah terverifikasi provider (Google/email link), dan hanya saat login pertama.
+- Seed menolak jalan bila `NODE_ENV=production`; invite `DEMO2026` dan user demo hanya dibuat di dev.
+- Tidak ada endpoint debug, impersonasi, atau akun dengan kata sandi hardcode.
+- Domain Firebase harus **hostname persis**. Tidak ada wildcard. Preview Vercel tidak dipakai untuk menguji login.
+- `?next=` setelah login hanya menerima path internal. Validasi memakai `new URL(next, origin)` dan membandingkan `origin`, bukan cek awalan `//`.
+- Kode invite minimal 8 karakter acak, bukan kata kamus; percobaan redeem dibatasi lewat hitungan database.
+
+### 18.6 Upload dan media
+
+- Signature Cloudinary dibuat server, menyertakan `allowed_formats` (jpg, png, webp, heic, mp4, mov), `max_file_size`, dan folder tetap.
+- Tolak `image/svg+xml` dan HTML.
+- Key R2 dibuat server: `events/{eventId}/{uuid}.{ext}`; presign mengunci `Content-Type` dan berlaku maksimal 5 menit.
+- Semua media berada di domain publik provider. Keamanan bergantung pada key berisi uuid, bukan pada URL rahasia.
+- Media **tidak** disajikan lewat domain aplikasi: loader mengarah langsung ke provider; tidak ada `rewrite`/route/optimizer untuk upload.
+- Cloudinary memakai strict transformations, signed upload, dan `overwrite: false`.
+
+### 18.7 Sesi dan cookie
+
+- Nama cookie `__Host-olu_session` (mensyaratkan `Path=/`, `Secure`, tanpa `Domain`).
+- Atribut: `httpOnly`, `secure`, `sameSite=lax`, umur 5 hari, ditandatangani `SESSION_SECRET`.
+- Nilai cookie baru dibuat setiap login (mencegah session fixation).
+- Tidak ada revocation server-side di v1: cookie bertanda tangan berlaku sampai kedaluwarsa (5 hari). Logout menghapus cookie dan mencatat `visits(action='logout')`.
+
+### 18.8 Data dan privasi
+
+- `visits.path` disimpan ternormalisasi: tanpa query/hash, dan `/invite/{code}` diredaksi menjadi `/invite/[redacted]`.
+- `audit_logs` menyimpan `before`/`after`; akses baca hanya untuk `owner`/`editor`, dan tidak pernah memuat secret.
+- Backup harian ke R2 memuat baris soft-deleted; bucket backup terpisah dari bucket media dan tidak dapat di-list publik.
+- PWA tidak boleh meng-cache respons terautentikasi; hanya app shell.
+
+### 18.9 Dependency
+
+- Versi dikunci persis; lockfile di-commit; CI memakai `npm ci`.
+- Install memakai `--ignore-scripts`; postinstall hanya untuk paket yang di-allowlist eksplisit.
+- Actions di-pin ke commit SHA, `permissions` minimal, tanpa `pull_request_target`.
+- `npm audit --omit=dev` di CI, gagal pada tingkat `high`.
+- Dependency baru wajib dicatat di `docs/decisions.md`.
+- Dependabot mingguan untuk npm dan GitHub Actions; diff lockfile dibaca sebelum merge.
+
+### 18.10 Verifikasi keamanan
+
+| Uji | Cara | Ekspektasi |
+|---|---|---|
+| SQL injection | Kirim `' OR 1=1--` pada kode invite dan filter | Ditolak validasi, tidak ada error SQL |
+| CSRF | `curl -X POST` dengan Origin berbeda, tanpa cookie | 403 |
+| XSS | Caption `"><img src=x onerror=alert(1)>` | Tampil sebagai teks biasa |
+| Open redirect | `/login?next=https://contoh-palsu.test` | Diabaikan, kembali ke `/` |
+| Backdoor seed | Jalankan seed dengan `NODE_ENV=production` | Berhenti dengan pesan jelas |
+| Preview DB | Periksa env Preview di Vercel | Menunjuk Neon branch, bukan produksi |
+| Header | `curl -I` halaman utama | Header keamanan §18.4 ada |
+| Noindex | `curl -I /` dan `GET /robots.txt` | `X-Robots-Tag` noindex; `Disallow: /` |
+| Preview | Buka URL preview tanpa sesi Vercel | Tertahan Vercel Authentication |
+| Log invite | Kunjungi `/invite/ABC123`, lihat `visits` | Tersimpan `/invite/[redacted]` |
+| Open redirect varian | `?next=/\evil.com`, `%2F%2Fevil.com`, `https://evil.com` | Semua ditolak |
+| Upload berbahaya | Upload `.html` / `.svg` | Ditolak sebelum presign |
+| Image proxy | `/_next/image?url=https://evil.test/x.jpg` | 400, host tidak diizinkan |
+| Build tanpa script | `npm ci --ignore-scripts && npm run build` | Hijau |
+| Dependency | `npm audit --omit=dev` | Tidak ada `high`/`critical` |
+
+### 18.11 Anti-penyalahgunaan (spam judol / adware)
+
+Prinsip: situs ini **tidak menghasilkan trafik organik** dan **tidak punya konten dari pengunjung**. Dua sifat itu yang membuatnya tidak menarik bagi bandar judol. Jangan merusaknya tanpa keputusan baru.
+
+#### a. Nilai SEO dibuat nol
+
+- `app/robots.ts` mengembalikan `Disallow: /` untuk semua user-agent.
+- Header `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex` di semua respons HTML, termasuk preview.
+- Tidak ada sitemap, RSS, halaman daftar publik, atau "share page".
+- Landing `/` memakai **copy statis**; DB hanya memberi status `gate_open`. Judul event, nama guardian, dan isi ruangan tidak pernah dirender di halaman publik.
+- Metadata dan OG image statis. Tidak ada `opengraph-image` yang membaca database — crawler sosial tidak boleh bisa menarik konten privat tanpa login.
+- `poweredByHeader: false`; tanpa domain kustom dan tanpa wildcard DNS.
+
+#### b. Tidak ada jalur menulis konten publik
+
+- Guest read-only. Tidak ada komentar, guestbook, form kontak, atau upload dari guest.
+- `/invite/[code]` sebelum login hanya copy generik; validasi kode setelah sesi ada.
+- Caption dan deskripsi adalah teks biasa: tanpa markdown, HTML, atau auto-link.
+- Link keluar hanya `items.url` dan `song_url`, keduanya lewat allowlist. Label link tidak bisa diubah menjadi URL lain.
+- Server tidak pernah mengambil URL dari user (anti-SSRF). Thumbnail YouTube dibentuk dari ID, bukan dari URL mentah.
+
+#### c. Media tidak menjadi host phishing
+
+- Cloudinary dan R2 tetap origin terpisah. Tidak ada `rewrite`, route handler, atau optimizer yang menyajikan upload dari domain aplikasi.
+- `Content-Type` dan ekstensi dikunci; `.html`, `.svg`, dan `.js` ditolak.
+- Cloudinary memakai strict transformations, signed upload, dan `overwrite: false`.
+- Bucket backup privat dan terpisah dari bucket media; token R2 dibatasi per bucket; CORS hanya untuk origin aplikasi.
+- Media yang terbukti disalahgunakan boleh dihapus manual dari dashboard provider.
+
+#### d. Preview bukan ruang publik
+
+- Standard Protection + Vercel Authentication untuk semua deployment non-produksi.
+- Preview tidak dipakai menguji login Firebase.
+- Vercel sudah memberi noindex pada preview, tetapi header eksplisit tetap dipasang.
+
+#### e. Injeksi script dan iframe
+
+- CSP enforcement di M8 (report-only M6): `script-src` nonce, `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`, `frame-src` hanya YouTube/Spotify, `frame-ancestors 'none'`, `worker-src 'self'`.
+- Tidak ada ad network, tag manager, atau script pihak ketiga selain GA4.
+- Service worker hanya dari origin sendiri dan tidak pernah meng-cache HTML terautentikasi.
+- `Cache-Control: no-store` untuk respons yang membawa sesi.
+- `Referrer-Policy: no-referrer`; iframe embed memakai `referrerpolicy="no-referrer"`.
+
+#### f. Deteksi
+
+- Notifikasi deployment Vercel ke email/Telegram.
+- Alert kuota Cloudflare R2, Neon, dan Cloudinary.
+- Review mingguan `/admin/history` plus daftar user dan invite.
+- Tanda bahaya: user/invite tak dikenal, `create` di luar kebiasaan, lonjakan bandwidth R2, deployment tanpa PR, halaman baru muncul di hasil pencarian.
+
+#### g. Playbook insiden
+
+1. **Bekukan** — pause project Vercel, putuskan integrasi Git sementara.
+2. **Cabut** — rotasi `SESSION_SECRET` (semua sesi keluar), Firebase service account, Cloudinary, R2, Neon, dan Telegram; revoke token GitHub/Vercel.
+3. **Periksa** — `audit_logs`, daftar deployment, usage provider, query history Neon.
+4. **Pulihkan** — deploy commit terakhir yang dikenal baik, restore Neon branch, hapus preview dan media penyalahgunaan.
+5. **Laporkan** — Vercel abuse, Cloudflare abuse, Google Search Console removal.
+6. **Catat** — tambahkan keputusan dan test regresi.
+
+#### h. Batas yang diterima
+
+- `pub-*.r2.dev` dapat diakses siapa pun yang mengetahui URL; keamanannya bergantung pada key UUID, bukan URL rahasia.
+- `noindex` berarti situs tidak muncul di pencarian — memang tujuannya.
+- Preview memerlukan login Vercel di perangkat yang membukanya.
+
+Fitur baru yang membuka konten publik, komentar, atau upload dari guest **wajib** melewati keputusan baru di `docs/decisions.md`.
+
+### 18.12 Akun dan kredensial
+
+- 2FA atau passkey wajib di GitHub, Vercel, Cloudflare, Neon, Google/Firebase, dan Telegram.
+- GitHub: secret scanning + push protection aktif; token classik dengan scope lebar tidak dipakai; deploy key read-only.
+- Vercel: token dibatasi per project, token lama dicabut; notifikasi deployment aktif.
+- Cloudflare: token R2 dibatasi per bucket (media vs backup), tidak memakai global API key.
+- Cloudinary: API secret hanya di server; strict transformations aktif.
+- Firebase: service account key dirotasi jika ada indikasi bocor; authorized domains hanya hostname persis.
+- Secret yang pernah masuk git dianggap bocor permanen — rotasi, bukan sekadar hapus commit.
+- Log build tidak boleh memuat secret; env server tidak pernah masuk `NEXT_PUBLIC_*`.
+- Review kuartalan: daftar token aktif, anggota project, dan authorized domains.

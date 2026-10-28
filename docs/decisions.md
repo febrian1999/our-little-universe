@@ -44,6 +44,12 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 | D-032 | 2026-10-28 | Proteksi `main` | GitHub Ruleset: PR wajib, `verify` wajib, force-push & hapus ditolak, tanpa bypass | Tidak ada push langsung ke `main` | Repo publik agar ruleset dan Actions gratis |
 | D-033 | 2026-10-28 | Unit testing | Vitest + Testing Library; coverage `lib/` & `components/` ≥ 80% | Cepat, TS native, gratis | Test berdampingan dengan sumber; tanpa DB/jaringan |
 | D-034 | 2026-10-28 | Audit log perubahan | Tabel `audit_logs` append-only, ditulis dalam transaksi mutasi lewat `lib/audit.ts` | `visits` hanya mencatat kunjungan, bukan perubahan data | Pengecualian D-019/D-020: hanya `created_at`, tanpa `updated_at`/`deleted_at`; ikut backup dan retensi permanen |
+| D-035 | 2026-10-28 | Baseline keamanan | Header wajib sejak M1, cookie `__Host-olu_session`, `assertSameOrigin` untuk `/api/**`, URL allowlist, Zod `.strict()` + pemetaan field eksplisit, larangan `sql.raw`/`dangerouslySetInnerHTML`/`eval` | Empat area yang diminta: SQLi, CSRF, XSS, backdoor | Rincian di PRD §18; helper di `lib/security/` |
+| D-036 | 2026-10-28 | Seed di produksi | `scripts/seed.ts` menolak jalan bila `NODE_ENV=production`; invite `DEMO2026` dan user demo hanya dibuat di dev | Seed produksi = backdoor guest yang bisa dipakai siapa pun | Seed hanya untuk database lokal/Neon branch |
+| D-037 | 2026-10-28 | CSP | `Content-Security-Policy-Report-Only` di M6, enforcement dengan nonce di M8 | Risiko merusak embed YouTube/Spotify jika langsung enforce | Sumber diizinkan: self, Cloudinary, `pub-*.r2.dev`, YouTube, Spotify, GA4 |
+| D-038 | 2026-10-28 | Env Preview | `DATABASE_URL` pada environment Preview Vercel wajib menunjuk Neon branch, bukan database produksi | PR terbuka bisa merusak data asli | Uji migrasi dan login preview memakai branch terpisah |
+| D-039 | 2026-10-28 | Postur anti-penyalahgunaan | `robots.txt` + `X-Robots-Tag` noindex di semua respons, landing statis, preview via Vercel Authentication, caption tanpa auto-link/HTML, media tidak diproksikan lewat domain aplikasi | Situs ini sasaran potensial spam judol/adware; nilai SEO dan jalur tulis harus dibuat nol | Rincian di PRD §18.11; preview butuh login Vercel; tidak ada OG dinamis |
+| D-040 | 2026-10-28 | Hardening akun & supply chain | 2FA/passkey di GitHub/Vercel/Cloudflare/Neon/Firebase, secret scanning + push protection, Actions pin SHA, `npm ci --ignore-scripts`, playbook insiden | Kredensial dan build script adalah jalur masuk yang tersisa | Rincian PRD §18.12; postinstall hanya untuk paket yang di-allowlist; secret yang pernah masuk git wajib dirotasi |
 
 ---
 
@@ -57,5 +63,5 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 
 ## Catatan
 
-- Keputusan stack (Next.js 15, Drizzle, Neon, Firebase Auth, Cloudinary, R2, Vercel, Serwist) ada di `docs/PRD.md` §3 dan sudah mengikat.
-- D-001 s.d. D-034 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
+- Keputusan stack (Next.js 16.4.3, Drizzle, Neon, Firebase Auth, Cloudinary, R2, Vercel, Serwist) ada di `docs/PRD.md` §3 dan sudah mengikat.
+- D-001 s.d. D-040 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
