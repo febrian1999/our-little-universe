@@ -15,9 +15,10 @@ Urutan baca yang disarankan:
 
 1. **Skema adalah sumber kebenaran.** Kalau kode dan skema bertentangan, skema menang.
 2. **Satu pintu per tanggung jawab.** Database lewat `lib/db/repositories/`, auth lewat `lib/auth/`, pencatatan history lewat `lib/visits.ts`, media lewat `lib/media/`.
-3. **Server yang memutuskan.** Role, kuota, dan validasi tidak pernah hanya di client.
+3. **Server yang memutuskan.** Role, batas upload, dan validasi tidak pernah hanya di client.
 4. **Ubah sesedikit mungkin.** Jangan refactor file yang tidak berkaitan dengan tugas.
 5. **Kalau ragu, berhenti dan tanya.** Lebih baik satu pertanyaan daripada satu migrasi yang salah.
+6. **Tidak ada hard delete.** Semua penghapusan soft delete, dan media tidak ikut dihapus.
 
 ---
 
@@ -27,6 +28,7 @@ Urutan baca yang disarankan:
 app/
   (public)/page.tsx                  gate
   (auth)/login/page.tsx
+  (auth)/auth/action/page.tsx
   (auth)/invite/[code]/page.tsx
   (app)/[eventSlug]/page.tsx
   (app)/[eventSlug]/[roomKey]/page.tsx
@@ -49,11 +51,13 @@ components/
   ui/gift-card.tsx
   ui/badge.tsx
   ui/button.tsx
-  ui/countdown.tsx
   ui/empty-state.tsx
   ambient-background.tsx
   guardian-status.tsx
   room-grid.tsx
+  song-card.tsx
+  song-picker.tsx
+  video-poster-upload.tsx
   admin/kpi-card.tsx
   admin/timeline-table.tsx
   admin/item-form.tsx
@@ -91,7 +95,7 @@ middleware.ts
 
 Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
 
-1. `DELETE FROM visits` atau `UPDATE visits SET ...` selain kolom `visible`.
+1. `DELETE FROM` tabel mana pun. Semua penghapusan wajib soft delete (`deleted_at` + `deleted_by`). Khusus `visits`: dilarang dihapus dan hanya boleh di-`UPDATE` pada `visible`, `updated_at`, `updated_by`.
 2. `ALTER TABLE` manual di Neon console / psql.
 3. Mengedit file di `drizzle/` secara manual.
 4. Menaruh secret di file yang masuk git (`.env` wajib di `.gitignore`).
@@ -121,7 +125,7 @@ Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
 |---|---|---|
 | Komponen | PascalCase | `RoomGrid.tsx` |
 | Hook | `use` + PascalCase | `useGuardian.ts` |
-| Fungsi repository | `verbNoun` | `getEventBySlug`, `listRoomItems`, `createItem` |
+| Fungsi repository | `verbNoun` | `getEventBySlug`, `listRoomItems`, `createItem`, `softDeleteItem` |
 | Server Action | `verbNounAction` | `createItemAction` |
 | Skema Zod | camelCase + `Schema` | `createItemSchema` |
 | Tabel/kolom DB | snake_case | `created_at` |
@@ -168,6 +172,7 @@ Jangan menampilkan pesan error mentah dari database ke UI.
 6. perbarui lib/validation/*.schema.ts
 7. perbarui repository terkait
 8. npm run typecheck && npm run lint && npm run build
+9. pastikan kolom audit (`created_at`, `updated_at`, `updated_by`, `deleted_at`, `deleted_by`) dan filter `deleted_at` tetap utuh
 ```
 
 ### 5.2 Menambah halaman
@@ -199,6 +204,9 @@ Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
 - [ ] `npm run build` hijau
 - [ ] Tidak ada `any` baru
 - [ ] Tidak ada query database di luar `lib/db/repositories/`
+- [ ] Tidak ada `DELETE` di kode; penghapusan memakai `softDelete*`
+- [ ] Semua query baca memfilter `deleted_at is null`
+- [ ] Setiap mutasi mengisi `updated_at` dan `updated_by`
 - [ ] Jika skema berubah: migrasi ada, `docs/schema.md` diperbarui
 - [ ] Jika route baru: aturan akses sesuai PRD §4 dan ditegakkan di server
 - [ ] Tampilan diuji di 360 px dan 1440 px, tanpa scroll horizontal
@@ -227,6 +235,27 @@ Semua perintah ini harus ada di `package.json` sejak M1.
 ---
 
 ## 8. Batasan Teknis yang Sering Salah
+
+### Soft delete
+
+```ts
+// BENAR
+await db.update(items)
+  .set({
+    deletedAt: new Date(),
+    deletedBy: user.id,
+    updatedAt: new Date(),
+    updatedBy: user.id,
+  })
+  .where(and(eq(items.id, id), isNull(items.deletedAt)));
+
+// SALAH
+await db.delete(items).where(eq(items.id, id));
+```
+
+- Semua query baca menambahkan `isNull(table.deletedAt)`.
+- Unique index bersifat parsial (`where deleted_at is null`). Jangan memakai `.unique()` biasa di kolom yang bisa di-soft-delete.
+- `visits` dan `settings` tidak punya `deleted_at`; jangan menambahkannya.
 
 ### Next.js 15
 

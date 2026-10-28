@@ -1,11 +1,12 @@
 # PRD — Our Little Universe
 
-**Versi:** 2.0
-**Status:** Draft untuk implementasi
+**Versi:** 2.2
+**Status:** Final — siap implementasi
 **Pemilik:** Ian
+**Update terakhir:** 2026-10-28
 **Asal:** project mangkrak `mybf.ian-gift` (Echa)
 **Target biaya:** Rp 0
-**Dokumen terkait:** `docs/schema.md`, `docs/agent-rules.md`
+**Dokumen terkait:** `docs/schema.md`, `docs/agent-rules.md`, `docs/decisions.md`
 
 ---
 
@@ -24,7 +25,7 @@ Dipertahankan:
 - Konsep "Gate" sebagai pintu masuk.
 - Nama ruangan: Homepage, Touring, Healing, Music.
 - Narasi Princess × Guardian.
-- Tanggal 17 September 2026 sebagai **catatan sejarah**, bukan gerbang otomatis.
+- Tanggal 17 September 2026 disimpan sebagai data (`events.starts_at`), **tidak ditampilkan** di UI.
 
 Dibuang:
 - `guardian-syc-firebase.js` (dead code, tidak pernah di-import).
@@ -44,12 +45,14 @@ Dibuang:
 - Multi-event (satu instalasi bisa menampung beberapa momen, mis. anniversary, ulang tahun).
 - Empat ruangan per event, dapat ditambah/diubah.
 - CRUD konten (teks, foto, video, lagu).
-- Upload foto (Cloudinary) dan video (Cloudflare R2).
+- Upload foto (Cloudinary) dan video (Cloudflare R2) — hanya `owner`/`editor`.
 - Undangan berbasis kode + batas pemakaian.
 - History append-only yang tidak pernah dihapus.
 - Dashboard admin: KPI, timeline, pengelolaan konten.
+- Lagu tempelan opsional di setiap postingan (kartu + embed).
 - PWA yang bisa diinstal di iPhone 13 dan Android.
 - Notifikasi Telegram yang bisa dimatikan.
+- Penghapusan bersifat **soft delete** — tidak ada hard delete, data tidak hilang permanen.
 
 ### 2.2 Di luar v1.0
 
@@ -58,7 +61,8 @@ Dibuang:
 - Pembayaran.
 - Email transaksional.
 - Aplikasi mobile native.
-- Kompresi video otomatis di browser.
+- Kompresi/transcoding video (browser maupun server) — video ditampilkan apa adanya.
+- Upload media oleh `guest`.
 
 ---
 
@@ -76,7 +80,7 @@ Keputusan di bawah ini mengikat. Perubahan harus dicatat di `docs/decisions.md`.
 | Auth | Firebase Auth (Google + email link) | Pilihan Ian; terisolasi di `lib/auth/` |
 | Foto | Cloudinary (signed upload) | Konversi HEIC ke WebP/AVIF otomatis |
 | Video | Cloudflare R2 (presigned PUT) | Egress gratis, 10 GB storage gratis |
-| Hosting | Vercel Hobby | Deploy dari GitHub, non-komersial |
+| Hosting | Vercel Hobby, domain `*.vercel.app` | Gratis dan non-komersial; domain kustom ditunda |
 | Notifikasi | Telegram Bot via route handler | Gratis, bekerja saat app tertutup |
 | Analytics | GA4 + Cloudflare Web Analytics | Kombinasi gratis |
 | PWA | Serwist | Offline shell, instalable |
@@ -102,7 +106,7 @@ Selama tiga fungsi itu tersedia, implementasi di baliknya boleh diganti (mis. ke
 |---|---|
 | `owner` | Semua; menghapus event; mengubah role user; membuka/menutup gate; mengatur notifikasi |
 | `editor` | Menambah/edit/hapus event, room, dan item; upload media; tidak bisa mengubah role |
-| `guest` | Membaca ruangan dengan `min_role = guest`; upload terbatas (kuota 20 file/hari); tidak bisa menghapus |
+| `guest` | Membaca semua ruangan (`min_role = guest`); **tidak bisa** upload, edit, atau hapus |
 
 Aturan akses halaman:
 
@@ -116,6 +120,10 @@ Aturan akses halaman:
 | `/admin/**` | `owner` atau `editor` |
 
 Semua pengecekan role dilakukan **di server** (middleware + repository), tidak pernah hanya di client.
+
+Semua room — termasuk `healing` — memakai `min_role = guest`. Pembatasan tulis murni berbasis role: hanya `owner` dan `editor`.
+
+`owner` dan `editor` sama-sama boleh menghapus event, room, dan item. Semua penghapusan adalah **soft delete** (`deleted_at` + `deleted_by`); tidak ada `DELETE` di aplikasi dan tidak ada UI pemulihan di v1.
 
 ---
 
@@ -157,16 +165,22 @@ Login → halaman /[eventSlug]/connect
 
 ### 5.4 Menambah konten
 
+Hanya `owner` dan `editor`. `guest` tidak melihat tombol ini dan endpoint upload menolaknya di server.
+
 ```
 /admin → pilih event → pilih room → "Tambah item"
 
 foto     → POST /api/upload/sign            → upload langsung ke Cloudinary
            → simpan { type:'photo', provider:'cloudinary', public_id, width, height }
 video    → POST /api/upload/r2/presign      → PUT langsung browser ke R2
+           → ambil frame pertama di canvas  → upload poster ke Cloudinary
            → simpan { type:'video', provider:'r2', url, thumb_url, duration_s }
-lagu     → tempel URL Spotify/YouTube       → simpan { type:'song', provider:'spotify' }
+video >500 MB → tempel URL YouTube unlisted → simpan { type:'video', provider:'youtube', url }
+lagu     → tempel URL Spotify/YouTube       → simpan { type:'song', provider:'spotify', url }
 teks     → tulis langsung                   → simpan { type:'text', caption }
 ```
+
+Setiap item non-lagu boleh diberi **satu lagu tempelan** lewat `song_provider`, `song_url`, `song_title`, `song_start_s`. Kartu lagu memutar embed; autoplay dicoba, dan jika browser memblokir, pemutaran dimulai pada sentuhan pertama di ruangan. Musik berhenti saat pindah room.
 
 Upload dicatat sebagai `upload` di `visits`.
 
@@ -186,6 +200,7 @@ Upload dicatat sebagai `upload` di `visits`.
 ```
 /                                  landing + gate
 /login                             login
+/auth/action                       penyelesaian email link Firebase
 /invite/[code]                     redeem undangan
 /[eventSlug]                       universe home (layout B)
 /[eventSlug]/[roomKey]             ruangan
@@ -269,27 +284,36 @@ Breakpoint uji wajib: 360, 390, 430, 768, 1024, 1440.
 | Tipe | Penyimpanan | Upload | Transformasi |
 |---|---|---|---|
 | Foto | Cloudinary | `POST /api/upload/sign` → upload langsung | `f_auto,q_auto,w_<size>` via loader |
-| Video ≤ 10 GB total | Cloudflare R2 | presigned PUT browser → R2 | tanpa transformasi; poster dari Cloudinary |
-| Video besar/panjang | YouTube unlisted | tempel URL | embed |
+| Video ≤ 500 MB | Cloudflare R2 | presigned PUT browser → R2 | tanpa transformasi |
+| Poster video | Cloudinary | frame pertama diambil lewat `canvas` | `f_auto,q_auto,w_<size>` |
+| Video besar/panjang | YouTube unlisted | tempel URL manual | embed; tidak dipublikasi di channel |
+| Lagu tempelan | Spotify/YouTube | tempel URL | embed di kartu lagu |
 
 ### 8.1 Aturan
 
 - Upload **selalu** lewat endpoint server yang memverifikasi sesi + role. Tidak ada unsigned preset.
+- Upload hanya untuk role `owner`/`editor`; `guest` read-only.
+- Batas **500 MB per file** video, dicek di server sebelum presign. Video lebih besar diarahkan ke YouTube unlisted karena tidak ada kompresi.
+- Poster video diambil otomatis dari frame pertama di browser lalu diunggah ke Cloudinary (bukan R2) agar hemat bandwidth. Jika gagal, poster boleh kosong.
+- Salinan YouTube wajib **unlisted**, tidak pernah `public` dan tidak dipublikasikan ke channel.
 - Key R2 dibuat server: `events/{eventId}/{uuid}.{ext}` — mencegah path traversal.
-- Poster video diambil dari Cloudinary (bukan R2) agar hemat bandwidth.
 - R2 butuh CORS: `AllowedOrigins: [domain app]`, `AllowedMethods: [PUT, GET]`, `AllowedHeaders: [*]`.
+- Tanpa domain kustom, bucket diakses lewat `https://pub-xxxx.r2.dev`.
+- Menghapus item **tidak** menghapus file di Cloudinary/R2. Pembersihan aset dilakukan manual dari dashboard provider.
+- Semua guest melihat video setelah login app; tautan YouTube tidak meminta akun Google.
 
 ### 8.2 Rencana pertumbuhan video
 
-Saat ini < 10 GB (batas gratis R2). Jika melewati:
-1. Kompres ke 720p H.265 (hemat 60–70%).
-2. Pindahkan video panjang ke YouTube unlisted.
-3. Cloudflare Stream (berbayar) hanya jika benar-benar perlu.
+Saat ini < 10 GB (batas gratis R2) dan **tidak ada kompresi**. Karena file tidak pernah dihapus lewat app, kuota hanya bertambah. Jika melewati:
+1. Pindahkan video panjang ke YouTube unlisted (jalur utama).
+2. Hapus video lama dari R2 **manual** lewat dashboard Cloudflare, setelah dipastikan ada di YouTube atau backup.
+3. Kompres manual di luar app (mis. HandBrake 720p H.265) sebelum upload — opsional, bukan fitur app.
+4. Cloudflare Stream (berbayar) hanya jika benar-benar perlu.
 
 ### 8.3 Setup akun (belum dimiliki)
 
 1. **Cloudinary** — daftar free; catat `cloud_name`, `api_key`, `api_secret`; buat upload preset bertipe **signed**.
-2. **Cloudflare R2** — aktifkan R2 (free 10 GB); buat bucket `olu-media`; buat API token S3; hubungkan custom domain.
+2. **Cloudflare R2** — aktifkan R2 (free 10 GB); buat bucket `olu-media`; buat API token S3; aktifkan Public Access lewat `r2.dev` (custom domain ditunda).
 3. **Neon** — buat project; salin `DATABASE_URL` (gunakan pooled connection untuk Vercel).
 4. **Vercel** — import repo GitHub; isi environment variables.
 5. **Telegram** — BotFather `/newbot`; ambil token; `getUpdates` untuk chat ID.
@@ -317,7 +341,7 @@ POST /api/notify/telegram     (wajib sesi valid)
 
 ### 10.1 Prinsip
 
-**History tidak pernah dihapus.** Data yang dianggap berisik disembunyikan (`visits.visible = false`), bukan di-`DELETE`.
+**History tidak pernah dihapus.** Data yang dianggap berisik disembunyikan (`visits.visible = false`), bukan di-`DELETE`. `visits` adalah satu-satunya tabel tanpa kolom `deleted_at` — history tidak ikut soft delete.
 
 ### 10.2 Aksi yang dicatat
 
@@ -331,10 +355,10 @@ POST /api/notify/telegram     (wajib sesi valid)
 
 ### 10.4 Statistik
 
-Dihitung on-the-fly dengan SQL, tanpa tabel counter:
+Dihitung on-the-fly dengan SQL, tanpa tabel counter. Semua agregasi dan tampilan memakai zona waktu **`Asia/Jakarta`**:
 
 ```sql
-select date_trunc('day', created_at) as day,
+select date_trunc('day', created_at at time zone 'Asia/Jakarta') as day,
        count(*) filter (where action = 'room_view') as views,
        count(distinct session_hash) as uniques
 from visits
@@ -350,7 +374,7 @@ order by 1 desc;
 
 ### 10.6 Backup
 
-`scripts/backup.ts` dijalankan GitHub Action harian: dump `visits` + seluruh konten ke JSON/CSV, unggah ke R2. Retensi 90 hari.
+`scripts/backup.ts` dijalankan GitHub Action harian: dump `visits` + seluruh konten ke JSON/CSV, unggah ke R2. Retensi 90 hari. Baris yang sudah soft-delete **ikut** di-dump; file media tidak.
 
 ---
 
@@ -359,12 +383,15 @@ order by 1 desc;
 | Risiko | Mitigasi |
 |---|---|
 | Guest membuka ruangan terlarang | Cek `min_role` di repository (server), bukan di komponen |
-| Spam upload | Kuota per user per hari; cek role di route handler |
+| Upload tidak sah | Hanya `owner`/`editor`; cek role di route handler sebelum presign |
+| File kebesaran | Batas 500 MB per file video, dicek di server |
 | Secret bocor | `*_SECRET`, `PRIVATE_KEY`, `BOT_TOKEN` hanya di env server (tanpa `NEXT_PUBLIC_`) |
 | Path traversal R2 | Key dibuat server, bukan dari nama file client |
 | Koneksi Postgres habis | Pooled `DATABASE_URL`, satu instance `db` |
 | Backup hilang | Cron harian ke R2 |
-| Session dicuri | Cookie `httpOnly`, `secure`, `sameSite=lax`, umur 5 hari |
+| Session dicuri | Cookie `httpOnly`, `secure`, `sameSite=lax`, ditandatangani `SESSION_SECRET`, umur 5 hari |
+| Penghapusan tidak sengaja | Soft delete + `deleted_by`; pulihkan lewat SQL manual oleh owner |
+| Media yatim | Diterima (D-018); pembersihan manual di dashboard Cloudinary/R2 |
 
 ---
 
@@ -387,10 +414,10 @@ order by 1 desc;
 | M | Isi | Definisi selesai |
 |---|---|---|
 | M1 | Scaffold, Tailwind, layout B/C, ambient layer | Halaman kosong responsif di 360 & 1440; `npm run build` hijau |
-| M2 | Drizzle schema + migrasi + seed + repository | `npm run db:migrate` jalan; seed menghasilkan 1 event + 4 room |
+| M2 | Drizzle schema + migrasi + seed + repository | `npm run db:migrate` jalan; seed menghasilkan 1 event + 4 room; semua query filter `deleted_at` |
 | M3 | Auth (`lib/auth/`) + middleware + login/invite | Guest bisa masuk via invite; owner bisa masuk |
-| M4 | CRUD event/room/item + halaman user | Konten tampil di user dan bisa diedit di admin |
-| M5 | Upload Cloudinary + R2 | Foto HEIC dari iPhone tampil di Chrome Android |
+| M4 | CRUD event/room/item + halaman user + kartu lagu | Konten tampil di user dan bisa diedit di admin; hapus = soft delete |
+| M5 | Upload Cloudinary + R2 + poster canvas | Foto HEIC dari iPhone tampil di Chrome Android |
 | M6 | Visits + dashboard history + statistik | Aksi tercatat; data tidak bisa dihapus dari UI |
 | M7 | Gate toggle + notifikasi Telegram | Gate berubah; pesan masuk ke Telegram |
 | M8 | PWA + polish + a11y | Terinstal di iPhone 13 & Android; Lighthouse ≥ 90 |
@@ -408,6 +435,8 @@ NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=
 FIREBASE_CLIENT_EMAIL=                      # server only
 FIREBASE_PRIVATE_KEY=                       # server only
+SESSION_SECRET=                             # server only, penanda tangan cookie
+OWNER_EMAIL=firdausfebrian666@gmail.com     # email owner pertama
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=                      # server only
@@ -415,23 +444,29 @@ R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=                       # server only
 R2_BUCKET=olu-media
-R2_PUBLIC_BASE=https://media.example.dev
+R2_PUBLIC_BASE=https://pub-xxxxxxxx.r2.dev     # tanpa domain kustom
 TELEGRAM_BOT_TOKEN=                         # server only
 NEXT_PUBLIC_GA_ID=
 ```
 
 ---
 
-## 15. Keputusan Terbuka
+## 15. Keputusan Final
 
-Perlu jawaban Ian sebelum atau selama implementasi:
+Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-026).**
 
-1. Domain: tetap `*.vercel.app` (Rp 0) atau beli domain (~Rp 150 ribu/tahun)?
-2. Apakah ruangan "Healing" (surat pribadi) memakai `min_role = editor`?
-3. Perlu kompresi video otomatis di browser (tetap Rp 0, tambah ± 1 hari kerja)?
-4. Guest boleh upload, atau upload hanya untuk owner/editor?
-5. Nama event pertama: tetap "Our Little Universe" atau nama lain?
-6. Apakah tanggal 17 September 2026 perlu ditampilkan sebagai bagian cerita di landing?
+| Topik | Keputusan |
+|---|---|
+| Domain | Tetap `*.vercel.app`, tanpa domain kustom |
+| Akses konten | Login app wajib untuk semua konten; YouTube unlisted tanpa akun Google |
+| Ruangan Healing | Bisa dilihat `guest`, tidak bisa diedit |
+| Upload | Hanya `owner`/`editor`; batas 500 MB per file video |
+| Video | Tanpa kompresi; R2 sumber utama, salinan YouTube unlisted manual |
+| Lagu | Satu lagu tempelan per postingan, kartu + embed |
+| Nama event | "Our Little Universe", slug `our-little-universe` |
+| Tanggal 17 Sep 2026 | Tidak ditampilkan di UI |
+| Hapus konten | `owner` + `editor`; soft delete untuk semua tabel |
+| Zona waktu | `Asia/Jakarta` |
 
 ---
 
@@ -442,5 +477,8 @@ Perlu jawaban Ian sebelum atau selama implementasi:
 | Neon autosuspend 5 menit | Request pertama terasa lambat | Terima (± 500 ms), atau ping cron harian |
 | Kuota Firebase Auth | — | Gratis tanpa batas praktis untuk 2–20 user |
 | Vercel Hobby non-komersial | Situs bisa dinonaktifkan jika dipakai komersial | Pindah ke Cloudflare Pages bila perlu |
-| R2 10 GB penuh | Video gagal upload | Kompresi / YouTube / tier berbayar |
+| R2 10 GB penuh | Video gagal upload | YouTube unlisted / hapus video lama / tier berbayar (tanpa kompresi) |
+| `r2.dev` rate-limited | Video lambat atau gagal | Diterima untuk 2–20 user; beli domain jika mengganggu |
+| Media yatim | File menumpuk permanen di R2/Cloudinary | Diterima (D-018); bersihkan manual dari dashboard provider |
+| Baris soft-deleted menumpuk | Ruang DB 0,5 GB terpakai | Pantau; arsip manual saat mendekati batas |
 | AI menulis di luar pola | Kode berantakan | `docs/agent-rules.md` |

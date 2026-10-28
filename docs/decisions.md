@@ -1,0 +1,53 @@
+# Log Keputusan — Our Little Universe
+
+Setiap perubahan pada keputusan teknis di `docs/PRD.md` §3, atau keputusan yang mengubah skema/biaya/hak akses, dicatat di sini. Satu keputusan = satu baris. Jangan mengubah baris lama; tambahkan baris baru jika keputusan berubah.
+
+Format: `ID | tanggal | topik | keputusan | alasan | dampak`
+
+---
+
+## Keputusan aktif
+
+| ID | Tanggal | Topik | Keputusan | Alasan | Dampak |
+|---|---|---|---|---|---|
+| D-001 | 2026-10-28 | Domain | Tetap `*.vercel.app`, tanpa domain kustom | Target biaya Rp 0 | R2 diakses lewat `pub-xxxx.r2.dev`; ganti `R2_PUBLIC_BASE` jika nanti beli domain |
+| D-002 | 2026-10-28 | Akses ruangan Healing | `min_role = guest`; guest boleh melihat, tidak boleh mengedit | Isi tetap bisa dibaca orang terdekat | Semua room `min_role = guest`; batas tulis berbasis role |
+| D-003 | 2026-10-28 | Kompresi video | Tidak ada kompresi/transcoding, video tampil apa adanya | Menghindari dependency dan pekerjaan tambahan | Kuota R2 10 GB jadi risiko utama |
+| D-004 | 2026-10-28 | Izin upload | Hanya `owner`/`editor` | Mencegah spam dan isi tak terkontrol | `guest` read-only total |
+| D-005 | 2026-10-28 | Nama event pertama | "Our Little Universe" | Nama proyek dipertahankan | Slug `our-little-universe` di seed |
+| D-006 | 2026-10-28 | Tanggal 17 Sep 2026 | Tidak ditampilkan di UI | Bukan bagian cerita yang diinginkan | `events.starts_at` tetap ada sebagai data |
+| D-007 | 2026-10-28 | Batas file video | 500 MB per file | Melindungi kuota R2 tanpa kompresi | Dicek di server sebelum presign |
+| D-008 | 2026-10-28 | Guest upload | Dihapus total dari v1 | Tidak ada pemakai; mengurangi jalur mati | Key `settings.features` tidak dipakai |
+| D-009 | 2026-10-28 | Salinan YouTube | Unlisted, URL ditempel manual; R2 tetap sumber utama | Unlisted bisa diputar tanpa akun Google dan tidak tampil di channel | Tidak perlu OAuth/`googleapis`; video besar cukup di YouTube |
+| D-010 | 2026-10-28 | Lagu per postingan | Satu lagu opsional per item, kartu + embed, mulai otomatis | Meniru kebiasaan Instagram | Kolom `song_*` di `items`; autoplay jatuh ke sentuhan pertama jika diblokir |
+| D-011 | 2026-10-28 | Owner pertama | `OWNER_EMAIL` di env; email `firdausfebrian666@gmail.com` | Jalur aman tanpa invite manual | Promosi ke `owner` saat login pertama |
+| D-012 | 2026-10-28 | Tipe item | `photo`, `video`, `song`, `text`; `letter` dihapus | Semua tulisan cukup satu tipe | Enum berubah sebelum database dibuat |
+| D-013 | 2026-10-28 | Akses konten | Login app wajib untuk semua konten | Gate dan invite tetap bermakna | Pemutaran YouTube tetap tanpa akun Google |
+| D-014 | 2026-10-28 | Musik antar-room | Berhenti saat pindah room | Menghindari state global dan bug audio | Tidak ada mini-player di v1 |
+| D-015 | 2026-10-28 | Hapus event | `owner` dan `editor` boleh | Editor dipercaya mengelola event | Penghapusan soft delete, bisa dipulihkan manual |
+| D-016 | 2026-10-28 | Zona waktu | `Asia/Jakarta` untuk agregasi dan tampilan | Menghindari hari bergeser 7 jam | Semua query statistik memakai `at time zone 'Asia/Jakarta'` |
+| D-017 | 2026-10-28 | Poster video | Ambil frame pertama di browser, unggah ke Cloudinary | Tidak perlu upload manual | Butuh langkah `canvas` di komponen upload |
+| D-018 | 2026-10-28 | Hapus item | Hanya baris database; file Cloudinary/R2 tetap | Menghindari risiko salah hapus aset | Kuota R2 hanya bertambah; pembersihan manual di luar app |
+| D-019 | 2026-10-28 | Kolom audit | Semua tabel punya `created_at`, `updated_at`, `updated_by` | Jejak perubahan jelas | Repository wajib mengisi `updated_by` |
+| D-020 | 2026-10-28 | Soft delete | Semua penghapusan soft delete; tidak ada hard delete | Data tidak hilang permanen | Tidak ada `DELETE` di aplikasi; query filter `deleted_at is null` |
+| D-021 | 2026-10-28 | Pengecualian soft delete | `visits` dan `settings` tanpa `deleted_at` | `visits` append-only; `settings` key-value tidak pernah dihapus | `visits` disembunyikan lewat `visible` |
+| D-022 | 2026-10-28 | Kolom penghapus | Tambah `deleted_by` | Perlu tahu siapa yang menghapus, terutama karena editor boleh hapus event | Kolom uuid nullable di tabel yang punya `deleted_at` |
+| D-023 | 2026-10-28 | Nama kolom | `updated_by`, bukan `update_by` | Konsisten dengan `created_at`/`updated_at` dan `settings.updated_by` | — |
+| D-024 | 2026-10-28 | Unique + soft delete | Semua unique menjadi partial unique index `where deleted_at is null` | Nilai bisa dipakai ulang setelah dihapus | `users.email`, `users.firebase_uid`, `events.slug`, `invites.code`, `rooms(event_id,key)` |
+| D-025 | 2026-10-28 | Primary key invites | `id uuid` sebagai PK; `code` jadi kolom ber-index unik parsial | PK tidak bisa parsial, kode harus bisa dipakai ulang | Semua query invite memakai `code`, bukan PK |
+| D-026 | 2026-10-28 | Pembersihan media | Skrip `prune-media` dibatalkan | Bertentangan dengan soft delete | File media disimpan selamanya; dikelola manual dari dashboard provider |
+
+---
+
+## Konsekuensi yang diterima
+
+1. **Kuota R2 hanya bertambah.** Tidak ada jalur hapus file dari app, dan tidak ada kompresi. Penyelamatan: video panjang ke YouTube, bersihkan manual dari dashboard Cloudflare.
+2. **Database menumpuk baris soft-deleted.** Tidak ada UI pemulihan/pembersihan di v1; dikelola lewat SQL manual.
+3. **`r2.dev` punya rate limit** dan bukan jalur produksi resmi. Diterima untuk 2–20 user (D-001).
+
+---
+
+## Catatan
+
+- Keputusan stack (Next.js 15, Drizzle, Neon, Firebase Auth, Cloudinary, R2, Vercel, Serwist) ada di `docs/PRD.md` §3 dan sudah mengikat.
+- D-001 s.d. D-026 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
