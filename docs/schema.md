@@ -18,8 +18,9 @@ Aturan utama: **tidak ada perubahan skema tanpa migrasi Drizzle.** `ALTER TABLE`
 5. **Soft delete, bukan cascade.** Tidak ada hard delete di aplikasi; baris diberi `deleted_at`.
 6. **Enum di database**, bukan string bebas.
 7. **Semua waktu `timestamptz`**, default `now()`.
-8. **Kolom audit wajib** di setiap tabel: `created_at`, `updated_at`, `updated_by`, ditambah `deleted_at`, `deleted_by` pada tabel yang bisa dihapus.
+8. **Kolom audit wajib** di setiap tabel: `created_at`, `updated_at`, `updated_by`, ditambah `deleted_at`, `deleted_by` pada tabel yang bisa dihapus. Pengecualian append-only: `audit_logs` hanya punya `created_at`.
 9. **`settings` hanya untuk data global** (gate, notifikasi, guardian) — bukan tempat menyimpan relasi.
+10. **Setiap mutasi data dicatat** ke `audit_logs` (append-only), terpisah dari `visits` yang mencatat kunjungan.
 
 ---
 
@@ -33,6 +34,8 @@ rooms  ──1:N──▶ items          (soft delete, bukan cascade)
 users  ──1:N──▶ visits         (nullable: guest terhapus, history tetap)
 events ──1:N──▶ visits         (nullable)
 rooms  ──1:N──▶ visits         (nullable)
+users  ──1:N──▶ audit_logs     (actor, nullable)
+events ──1:N──▶ audit_logs     (nullable)
 settings                        (key-value, tanpa relasi)
 ```
 
@@ -50,6 +53,8 @@ create type media_provider as enum ('cloudinary','r2','youtube','spotify','none'
 create type visit_action   as enum (
   'gate_open','room_view','login','logout','connect','upload','invite_redeem','gate_toggle'
 );
+create type audit_action   as enum ('create','update','soft_delete','restore');
+create type audit_entity   as enum ('event','room','item','invite','user','setting');
 
 -- ============ USERS ============
 create table users (
@@ -180,6 +185,21 @@ create table settings (
   updated_by uuid references users(id) on delete set null
 );
 
+-- ============ AUDIT LOGS (APPEND ONLY) ============
+-- Mencatat setiap perubahan data. Tidak pernah UPDATE, tidak pernah DELETE.
+-- Tanpa deleted_at/deleted_by: log tidak bisa dihapus dari aplikasi.
+create table audit_logs (
+  id         bigserial primary key,
+  actor_id   uuid references users(id) on delete set null,
+  action     audit_action not null,
+  entity     audit_entity not null,
+  entity_id  text not null,              -- uuid entitas, atau key untuk settings
+  event_id   uuid references events(id) on delete set null,
+  before     jsonb,
+  after      jsonb,
+  created_at timestamptz not null default now()
+);
+
 -- ============ INDEX ============
 create index visits_created_idx    on visits (created_at desc);
 create index visits_action_idx     on visits (action, created_at desc);
@@ -187,6 +207,9 @@ create index visits_user_idx       on visits (user_id, created_at desc);
 create index visits_visible_idx    on visits (visible, created_at desc);
 create index items_room_order_idx  on items (room_id, sort_order);
 create index rooms_event_order_idx on rooms (event_id, sort_order);
+create index audit_logs_created_idx on audit_logs (created_at desc);
+create index audit_logs_entity_idx  on audit_logs (entity, entity_id, created_at desc);
+create index audit_logs_actor_idx   on audit_logs (actor_id, created_at desc);
 
 -- Unique hanya untuk baris aktif (soft delete membuat nilai bisa dipakai ulang)
 create unique index users_email_active_idx on users (email)
@@ -206,6 +229,7 @@ create unique index rooms_event_key_active_idx on rooms (event_id, key)
 - `item_type` **tidak punya** `letter`. Semua tulisan memakai `text`.
 - `song` adalah item berdiri sendiri untuk room Music: lagu ada di `provider` + `url`.
 - Item bertipe lain boleh punya **satu lagu tempelan** di `song_provider`, `song_url`, `song_title`, `song_start_s`.
+- `audit_logs` append-only, jadi **tidak** punya `updated_at`, `updated_by`, `deleted_at`, `deleted_by`. Ini pengecualian eksplisit dari aturan kolom audit (D-034).
 
 ---
 
@@ -226,6 +250,12 @@ export const mediaProvider = pgEnum('media_provider', [
 export const visitAction = pgEnum('visit_action', [
   'gate_open', 'room_view', 'login', 'logout',
   'connect', 'upload', 'invite_redeem', 'gate_toggle',
+]);
+export const auditAction = pgEnum('audit_action', [
+  'create', 'update', 'soft_delete', 'restore',
+]);
+export const auditEntity = pgEnum('audit_entity', [
+  'event', 'room', 'item', 'invite', 'user', 'setting',
 ]);
 
 // --- helper kolom audit -------------------------------------------------
@@ -375,6 +405,26 @@ export const settings = pgTable('settings', {
   value: jsonb('value').notNull(),
   ...stamped(),
 });
+
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    action: auditAction('action').notNull(),
+    entity: auditEntity('entity').notNull(),
+    entityId: text('entity_id').notNull(),
+    eventId: uuid('event_id').references(() => events.id, { onDelete: 'set null' }),
+    before: jsonb('before'),
+    after: jsonb('after'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('audit_logs_created_idx').on(t.createdAt),
+    index('audit_logs_entity_idx').on(t.entity, t.entityId, t.createdAt),
+    index('audit_logs_actor_idx').on(t.actorId, t.createdAt),
+  ],
+);
 ```
 
 `users` merujuk dirinya sendiri lewat `updated_by`/`deleted_by`; callback `references` bersifat lazy sehingga aman.
@@ -466,6 +516,25 @@ Untuk `type = 'song'`, lagu disimpan di `provider`/`url` dan `song_*` dibiarkan 
 
 Key `features` tidak dipakai. Izin upload ditentukan oleh role (`owner`/`editor`), bukan flag.
 
+### `audit_logs`
+
+| Kolom | Keterangan |
+|---|---|
+| `actor_id` | user yang melakukan perubahan; `null` untuk seed/backup/sistem |
+| `action` | `create` / `update` / `soft_delete` / `restore` |
+| `entity` | jenis entitas yang berubah |
+| `entity_id` | uuid entitas, atau key untuk `settings` (kolom `text`) |
+| `event_id` | cakupan event untuk filter dashboard; `null` untuk perubahan level user/settings |
+| `before` | snapshot JSON kolom sebelum perubahan; `null` saat `create` |
+| `after` | snapshot JSON sesudah perubahan; `null` saat `soft_delete` |
+| `created_at` | waktu kejadian |
+
+Aturan:
+- Tidak pernah `UPDATE`, tidak pernah `DELETE`.
+- Ditulis **dalam transaksi yang sama** dengan mutasi, lewat `lib/audit.ts`.
+- Jangan mencatat secret. Untuk `settings`, catat key dan field non-rahasia saja.
+- `users.last_login_at` tidak dicatat agar log tidak penuh noise.
+
 ---
 
 ## 6. Query yang Harus Dilayani
@@ -484,6 +553,8 @@ Semua query baca **wajib** menambahkan `deleted_at is null` pada tabel yang puny
 | 8 | User by firebase_uid | `select * from users where firebase_uid = $1 and deleted_at is null` |
 | 9 | Validasi invite | `select * from invites where code = $1 and deleted_at is null and active and (expires_at is null or expires_at > now()) and uses < max_uses` |
 | 10 | Event utama untuk gate landing | `select * from events where deleted_at is null order by sort_order, created_at limit 1` |
+| 11 | Log satu entitas | `select * from audit_logs where entity = $1 and entity_id = $2 order by created_at desc limit 50` |
+| 12 | Log terbaru untuk dashboard | `select * from audit_logs order by created_at desc limit 50` |
 
 ---
 
@@ -530,10 +601,23 @@ returning id, role;
 -- jika rowCount = 0 → rollback
 commit;
 
--- Soft delete item
+-- Soft delete item + audit, satu transaksi
+begin;
 update items
    set deleted_at = now(), deleted_by = $2, updated_at = now(), updated_by = $2
- where id = $1 and deleted_at is null;
+ where id = $1 and deleted_at is null
+returning *;
+
+insert into audit_logs (actor_id, action, entity, entity_id, event_id, before, after)
+values ($2, 'soft_delete', 'item', $1, $3, $4::jsonb, null);
+commit;
+
+-- Log terbaru
+select l.created_at, l.action, l.entity, l.entity_id, u.display_name
+from audit_logs l
+left join users u on u.id = l.actor_id
+order by l.created_at desc
+limit 50;
 ```
 
 ---
@@ -554,6 +638,8 @@ update items
 | Lagu tempelan | Maks satu per item; `song_url` wajib host `open.spotify.com` atau `youtube.com`/`youtu.be` |
 | Upload | Hanya `owner`/`editor`; maks 500 MB per file video, dicek di server |
 | File media saat item dihapus | **Tidak** dihapus dari Cloudinary/R2 (keputusan D-018) |
+| Audit log | Setiap `create`/`update`/`soft_delete`/`restore` menulis `audit_logs` dalam transaksi yang sama, lewat `lib/audit.ts` |
+| Audit tidak diubah | `audit_logs` append-only: dilarang `UPDATE` dan `DELETE` |
 
 ---
 
@@ -591,6 +677,7 @@ Aturan:
 2 users   : owner (firdausfebrian666@gmail.com), guest (demo@example.com)
 1 invite  : DEMO2026 (role guest, maxUses 5)
 settings  : guardian, notifications
+audit_logs: kosong (seed tidak menulis audit; actor_id null untuk operasi sistem)
 ```
 
 Seed harus **idempoten**. Karena unique index bersifat partial, `on conflict` wajib menyertakan predikatnya:
@@ -608,6 +695,7 @@ on conflict (email) where deleted_at is null do nothing;
 | Data | Retensi | Metode |
 |---|---|---|
 | `visits` | **selamanya** | Tidak dihapus; di-dump harian ke R2 |
+| `audit_logs` | **selamanya** | Tidak dihapus; di-dump harian ke R2 |
 | `items`, `rooms`, `events` | aktif + terhapus | Dump harian ke R2, **termasuk baris soft-deleted** |
 | Dump di R2 | 90 hari | Lifecycle rule di bucket |
 | User | aktif + terhapus | Dump harian |
@@ -622,6 +710,7 @@ on conflict (email) where deleted_at is null do nothing;
 |---|---|
 | `visits` > 500 ribu baris | Partisi per bulan (`partition by range (created_at)`) |
 | `visits` > 5 juta baris | Arsipkan bulan yang lebih lama ke R2 (Parquet), sisakan ringkasan harian |
+| `audit_logs` > 1 juta baris | Arsipkan periode lama ke R2, sisakan 90 hari terakhir di database |
 | `items` > 20 ribu | Tambah paginasi server-side + `limit` wajib di semua query |
 | Soft-deleted `items` menumpuk | Arsipkan baris lama ke R2 lalu hapus manual — keputusan Ian, bukan otomatis |
 | Storage 0,5 GB mendekati batas | Pindahkan kolom teks panjang (`caption`, `description`) ke R2 bila perlu |

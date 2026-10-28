@@ -32,10 +32,18 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 | D-020 | 2026-10-28 | Soft delete | Semua penghapusan soft delete; tidak ada hard delete | Data tidak hilang permanen | Tidak ada `DELETE` di aplikasi; query filter `deleted_at is null` |
 | D-021 | 2026-10-28 | Pengecualian soft delete | `visits` dan `settings` tanpa `deleted_at` | `visits` append-only; `settings` key-value tidak pernah dihapus | `visits` disembunyikan lewat `visible` |
 | D-022 | 2026-10-28 | Kolom penghapus | Tambah `deleted_by` | Perlu tahu siapa yang menghapus, terutama karena editor boleh hapus event | Kolom uuid nullable di tabel yang punya `deleted_at` |
-| D-023 | 2026-10-28 | Nama kolom | `updated_by`, bukan `update_by` | Konsisten dengan `created_at`/`updated_at` dan `settings.updated_by` | — |
-| D-024 | 2026-10-28 | Unique + soft delete | Semua unique menjadi partial unique index `where deleted_at is null` | Nilai bisa dipakai ulang setelah dihapus | `users.email`, `users.firebase_uid`, `events.slug`, `invites.code`, `rooms(event_id,key)` |
-| D-025 | 2026-10-28 | Primary key invites | `id uuid` sebagai PK; `code` jadi kolom ber-index unik parsial | PK tidak bisa parsial, kode harus bisa dipakai ulang | Semua query invite memakai `code`, bukan PK |
-| D-026 | 2026-10-28 | Pembersihan media | Skrip `prune-media` dibatalkan | Bertentangan dengan soft delete | File media disimpan selamanya; dikelola manual dari dashboard provider |
+| D-023 | 2026-10-28 | Unique + soft delete | Semua unique menjadi partial unique index `where deleted_at is null` | Nilai bisa dipakai ulang setelah dihapus | `users.email`, `users.firebase_uid`, `events.slug`, `invites.code`, `rooms(event_id,key)` |
+| D-024 | 2026-10-28 | Primary key invites | `id uuid` sebagai PK; `code` jadi kolom ber-index unik parsial | PK tidak bisa parsial, kode harus bisa dipakai ulang | Semua query invite memakai `code`, bukan PK |
+| D-025 | 2026-10-28 | Pembersihan media | Skrip `prune-media` dibatalkan | Bertentangan dengan soft delete | File media disimpan selamanya; dikelola manual dari dashboard provider |
+| D-026 | 2026-10-28 | Framework | Next.js **16.4.3**, versi dikunci persis | Versi stabil terbaru; proyek masih nol kode | Turbopack default; `params` tetap Promise; perlu cek breaking change CLI sebelum M1 |
+| D-027 | 2026-10-28 | Styling | Tailwind CSS **4.3.3** + `@tailwindcss/postcss` | Versi stabil terbaru | Tanpa `tailwind.config.js`; tema lewat `@theme` di `globals.css` |
+| D-028 | 2026-10-28 | TypeScript | Dikunci **5.9.3**; TS 7 ditunda | TS 7 native baru, ekosistem tooling belum tentu sinkron | Revisit setelah M1 stabil |
+| D-029 | 2026-10-28 | Docker | Tidak dipakai | Neon cloud; tidak ada komponen yang perlu dikontainerkan | Uji migrasi memakai Neon branch |
+| D-030 | 2026-10-28 | CD | Integrasi Git Vercel; tanpa pipeline deploy sendiri | Hobby gratis, preview per PR | Produksi hanya dari `main` |
+| D-031 | 2026-10-28 | Migrasi database | Manual via `workflow_dispatch` + input `MIGRATE` | SQL hasil generate wajib dibaca dulu | Tidak ada auto-migrate saat merge |
+| D-032 | 2026-10-28 | Proteksi `main` | GitHub Ruleset: PR wajib, `verify` wajib, force-push & hapus ditolak, tanpa bypass | Tidak ada push langsung ke `main` | Repo publik agar ruleset dan Actions gratis |
+| D-033 | 2026-10-28 | Unit testing | Vitest + Testing Library; coverage `lib/` & `components/` ≥ 80% | Cepat, TS native, gratis | Test berdampingan dengan sumber; tanpa DB/jaringan |
+| D-034 | 2026-10-28 | Audit log perubahan | Tabel `audit_logs` append-only, ditulis dalam transaksi mutasi lewat `lib/audit.ts` | `visits` hanya mencatat kunjungan, bukan perubahan data | Pengecualian D-019/D-020: hanya `created_at`, tanpa `updated_at`/`deleted_at`; ikut backup dan retensi permanen |
 
 ---
 
@@ -50,4 +58,4 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 ## Catatan
 
 - Keputusan stack (Next.js 15, Drizzle, Neon, Firebase Auth, Cloudinary, R2, Vercel, Serwist) ada di `docs/PRD.md` §3 dan sudah mengikat.
-- D-001 s.d. D-026 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
+- D-001 s.d. D-034 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.

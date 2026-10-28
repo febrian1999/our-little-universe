@@ -69,14 +69,23 @@ lib/
   media/cloudinary.ts  r2.ts  image-loader.ts
   validation/event.schema.ts  room.schema.ts  item.schema.ts  invite.schema.ts
   visits.ts
+  audit.ts
   utils/cn.ts  format-date.ts
 docs/
   PRD.md  schema.md  agent-rules.md  decisions.md
 drizzle/
 scripts/
   seed.ts  backup.ts
+.github/
+  workflows/ci.yml  migrate.yml  backup.yml
+  rulesets/main.json
+tests/
+  setup.ts
+vitest.config.ts
 middleware.ts
 ```
+
+File test berdampingan dengan sumbernya (`lib/visits.test.ts`), bukan di folder terpisah.
 
 ### Aturan penempatan
 
@@ -88,6 +97,9 @@ middleware.ts
 | Endpoint yang dipanggil client | `app/api/**/route.ts` |
 | Komponen visual | `components/` |
 | Logika auth | `lib/auth/` |
+| Unit test | `<nama-sumber>.test.ts` di samping sumbernya |
+| Workflow CI/CD | `.github/workflows/<nama>.yml` |
+| Penulisan audit log | `lib/audit.ts` (satu pintu, dipanggil dari repository) |
 
 ---
 
@@ -95,7 +107,7 @@ middleware.ts
 
 Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
 
-1. `DELETE FROM` tabel mana pun. Semua penghapusan wajib soft delete (`deleted_at` + `deleted_by`). Khusus `visits`: dilarang dihapus dan hanya boleh di-`UPDATE` pada `visible`, `updated_at`, `updated_by`.
+1. `DELETE FROM` tabel mana pun. Semua penghapusan wajib soft delete (`deleted_at` + `deleted_by`). Khusus `visits`: dilarang dihapus dan hanya boleh di-`UPDATE` pada `visible`, `updated_at`, `updated_by`. Khusus `audit_logs`: dilarang di-`UPDATE` maupun dihapus.
 2. `ALTER TABLE` manual di Neon console / psql.
 3. Mengedit file di `drizzle/` secara manual.
 4. Menaruh secret di file yang masuk git (`.env` wajib di `.gitignore`).
@@ -114,6 +126,7 @@ Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
 11. Menambah dependency baru tanpa mencatat alasan di `docs/decisions.md`.
 12. Mengubah `app/globals.css` di luar variabel tema dan utilitas yang sudah ditetapkan.
 13. Hardcode nama orang, tanggal, atau URL di komponen. Semua dari database atau env.
+14. Push langsung ke `main`, atau `git push --force` ke branch yang punya PR aktif.
 
 ---
 
@@ -130,6 +143,7 @@ Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
 | Skema Zod | camelCase + `Schema` | `createItemSchema` |
 | Tabel/kolom DB | snake_case | `created_at` |
 | File di `app/` | kebab-case | `room-grid.tsx` (kalau perlu) |
+| File test | nama sumber + `.test` | `lib/visits.test.ts` |
 
 ### Tipe
 
@@ -183,6 +197,7 @@ Jangan menampilkan pesan error mentah dari database ke UI.
 3. ambil data lewat repository
 4. pecah bagian interaktif jadi komponen 'use client'
 5. uji di 360 px dan 1440 px
+6. tulis unit test untuk logika murni yang lahir dari halaman itu
 ```
 
 ### 5.3 Menambah aksi yang perlu dicatat
@@ -201,12 +216,15 @@ Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
 
 - [ ] `npm run typecheck` hijau
 - [ ] `npm run lint` hijau
+- [ ] `npm run test:run` hijau
+- [ ] Coverage `lib/` dan `components/` ≥ 80%
 - [ ] `npm run build` hijau
 - [ ] Tidak ada `any` baru
 - [ ] Tidak ada query database di luar `lib/db/repositories/`
 - [ ] Tidak ada `DELETE` di kode; penghapusan memakai `softDelete*`
 - [ ] Semua query baca memfilter `deleted_at is null`
 - [ ] Setiap mutasi mengisi `updated_at` dan `updated_by`
+- [ ] Setiap mutasi data menulis `audit_logs` dalam transaksi yang sama
 - [ ] Jika skema berubah: migrasi ada, `docs/schema.md` diperbarui
 - [ ] Jika route baru: aturan akses sesuai PRD §4 dan ditegakkan di server
 - [ ] Tampilan diuji di 360 px dan 1440 px, tanpa scroll horizontal
@@ -222,6 +240,9 @@ Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
 npm run dev            # dev server
 npm run typecheck      # tsc --noEmit
 npm run lint           # eslint
+npm run test           # vitest watch
+npm run test:run       # vitest run (dipakai CI)
+npm run test:coverage  # vitest run --coverage
 npm run build          # production build
 
 npm run db:generate    # drizzle-kit generate
@@ -257,14 +278,20 @@ await db.delete(items).where(eq(items.id, id));
 - Unique index bersifat parsial (`where deleted_at is null`). Jangan memakai `.unique()` biasa di kolom yang bisa di-soft-delete.
 - `visits` dan `settings` tidak punya `deleted_at`; jangan menambahkannya.
 
-### Next.js 15
+### Next.js 16
 
-`params` dan `searchParams` adalah **Promise**:
+Turbopack adalah bundler default. `params` dan `searchParams` tetap **Promise**:
 ```ts
 export default async function Page({ params }: { params: Promise<{ eventSlug: string }> }) {
   const { eventSlug } = await params;
 }
 ```
+
+### Tailwind 4
+
+- Tidak ada `tailwind.config.js`. Konfigurasi lewat CSS: `@import "tailwindcss";` lalu blok `@theme`.
+- Warna tema (`primary`, `accent`) dideklarasikan di `@theme`, bukan di JS.
+- Jangan menambah `postcss.config` lain selain `@tailwindcss/postcss`.
 
 ### Responsif
 
@@ -307,10 +334,32 @@ export default async function Page({ params }: { params: Promise<{ eventSlug: st
 4. Jangan menulis ulang file utuh untuk perubahan kecil. Gunakan edit terarah.
 5. Jangan menjalankan `npm run build` berkali-kali; jalankan sekali di akhir.
 6. Jangan membuat file dokumentasi baru. Perbarui yang sudah ada.
+7. Unit test tidak boleh membuka koneksi database atau jaringan; mock `lib/db`.
 
 ---
 
-## 10. Format Commit
+## 10. Branch, Commit, dan PR
+
+### Branch
+
+```
+main            ← produksi, tidak boleh di-push langsung
+feat/<ringkas>  fix/<ringkas>  chore/<ringkas>  db/<ringkas>
+```
+
+Alur wajib:
+
+```bash
+git switch -c feat/nama-ringkas
+# ...kerja...
+git add -A && git commit -m "feat(scope): ringkasan"
+git push -u origin feat/nama-ringkas
+gh pr create --fill
+# tunggu job `verify` hijau
+gh pr merge --squash --delete-branch
+```
+
+### Format commit
 
 ```
 feat(admin): tambah form edit item
@@ -321,6 +370,14 @@ refactor(repo): satukan query room ke satu fungsi
 ```
 
 Satu commit = satu tujuan. Jangan gabungkan migrasi dengan perubahan UI.
+
+### Aturan PR
+
+- Judul PR mengikuti format commit.
+- Deskripsi wajib: apa yang berubah, cara menguji, risiko.
+- Jangan merge sebelum job `verify` hijau.
+- Jangan force-push ke branch yang sudah direview.
+- Migrasi database di PR tersendiri berawalan `db/`.
 
 ---
 

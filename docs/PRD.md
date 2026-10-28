@@ -1,6 +1,6 @@
 # PRD — Our Little Universe
 
-**Versi:** 2.2
+**Versi:** 2.3
 **Status:** Final — siap implementasi
 **Pemilik:** Ian
 **Update terakhir:** 2026-10-28
@@ -53,6 +53,9 @@ Dibuang:
 - PWA yang bisa diinstal di iPhone 13 dan Android.
 - Notifikasi Telegram yang bisa dimatikan.
 - Penghapusan bersifat **soft delete** — tidak ada hard delete, data tidak hilang permanen.
+- Unit test (Vitest) untuk logika murni, wajib hijau di CI.
+- Audit log perubahan data (append-only), terpisah dari history kunjungan.
+- CI GitHub Actions + proteksi `main`: tidak ada push langsung, semua lewat PR.
 
 ### 2.2 Di luar v1.0
 
@@ -72,9 +75,9 @@ Keputusan di bawah ini mengikat. Perubahan harus dicatat di `docs/decisions.md`.
 
 | Layer | Keputusan | Alasan |
 |---|---|---|
-| Framework | Next.js 15 App Router | Routing, server actions, satu repo |
-| Bahasa | TypeScript `strict` | Pedoman AI butuh tipe ketat |
-| Styling | Tailwind CSS v4 | Konsisten, tanpa file CSS terpisah |
+| Framework | Next.js 16.4.3 App Router | Versi stabil terbaru; Turbopack default |
+| Bahasa | TypeScript 5.9.3 `strict` | Tipe ketat; TS 7 ditunda sampai ekosistem siap |
+| Styling | Tailwind CSS 4.3.3 | Konfigurasi lewat `@theme` di CSS |
 | Database | Neon Postgres (free) | SQL, 0,5 GB, tanpa kartu kredit |
 | ORM | Drizzle ORM + drizzle-kit | SQL-first, migrasi versioned, tipe otomatis |
 | Auth | Firebase Auth (Google + email link) | Pilihan Ian; terisolasi di `lib/auth/` |
@@ -84,6 +87,8 @@ Keputusan di bawah ini mengikat. Perubahan harus dicatat di `docs/decisions.md`.
 | Notifikasi | Telegram Bot via route handler | Gratis, bekerja saat app tertutup |
 | Analytics | GA4 + Cloudflare Web Analytics | Kombinasi gratis |
 | PWA | Serwist | Offline shell, instalable |
+| Testing | Vitest + Testing Library | Cepat, TS native, tanpa biaya |
+| CI/CD | GitHub Actions + integrasi Git Vercel | Gratis, repo publik, deploy otomatis |
 
 ### 3.1 Catatan tentang Auth
 
@@ -211,7 +216,7 @@ Upload dicatat sebagai `upload` di `visits`.
 /admin/events/[id]/rooms/[roomId]  daftar item + form item
 /admin/media                       pustaka media
 /admin/access                      invite + daftar user
-/admin/history                     timeline kunjungan
+/admin/history                     timeline kunjungan + log perubahan
 /admin/settings                    gate, notifikasi, analytics
 ```
 
@@ -266,6 +271,13 @@ Desktop ≥1024px                     Mobile <1024px
 ### 7.4 CSS global wajib (`app/globals.css`)
 
 ```css
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #EC4899;
+  --color-accent: #2563EB;
+}
+
 body { min-height: 100dvh; overflow-x: clip; }
 input, select, textarea { font-size: 16px; }  /* cegah auto-zoom iOS */
 .tap { min-height: 44px; }
@@ -376,6 +388,16 @@ order by 1 desc;
 
 `scripts/backup.ts` dijalankan GitHub Action harian: dump `visits` + seluruh konten ke JSON/CSV, unggah ke R2. Retensi 90 hari. Baris yang sudah soft-delete **ikut** di-dump; file media tidak.
 
+### 10.7 Log perubahan data
+
+`audit_logs` mencatat setiap mutasi data: `create`, `update`, `soft_delete`, `restore` pada `event`, `room`, `item`, `invite`, `user`, dan `setting`.
+
+- Ditulis dalam transaksi yang sama dengan mutasi, lewat `lib/audit.ts` — satu pintu.
+- Menyimpan `before`/`after` sebagai JSON, plus `actor_id` dan `event_id`.
+- Append-only: tidak pernah `UPDATE`, tidak pernah `DELETE`.
+- `users.last_login_at` tidak dicatat agar log tidak penuh noise.
+- Ditampilkan di `/admin/history` sebagai tab "Perubahan" (M6).
+
 ---
 
 ## 11. Keamanan
@@ -392,6 +414,8 @@ order by 1 desc;
 | Session dicuri | Cookie `httpOnly`, `secure`, `sameSite=lax`, ditandatangani `SESSION_SECRET`, umur 5 hari |
 | Penghapusan tidak sengaja | Soft delete + `deleted_by`; pulihkan lewat SQL manual oleh owner |
 | Media yatim | Diterima (D-018); pembersihan manual di dashboard Cloudinary/R2 |
+| Perubahan data tanpa jejak | Setiap mutasi menulis `audit_logs` dengan `before`/`after` dan `actor_id` |
+| Log diubah atau dihapus | `audit_logs` append-only; tidak ada endpoint update/delete |
 
 ---
 
@@ -406,6 +430,7 @@ order by 1 desc;
 | Offline | Shell + halaman terakhir bisa dibuka (PWA) |
 | Kompatibilitas | Chrome/Safari/Firefox versi 2 tahun terakhir; iOS 16+ |
 | Observability | Error server tercatat di Vercel logs; tidak ada `console.log` di produksi |
+| Kualitas kode | `typecheck`, `lint`, `test:run`, `build` hijau di CI; coverage `lib/` ≥ 80% |
 
 ---
 
@@ -413,12 +438,12 @@ order by 1 desc;
 
 | M | Isi | Definisi selesai |
 |---|---|---|
-| M1 | Scaffold, Tailwind, layout B/C, ambient layer | Halaman kosong responsif di 360 & 1440; `npm run build` hijau |
-| M2 | Drizzle schema + migrasi + seed + repository | `npm run db:migrate` jalan; seed menghasilkan 1 event + 4 room; semua query filter `deleted_at` |
+| M1 | Scaffold, Tailwind, layout B/C, ambient layer, Vitest, CI | Halaman kosong responsif di 360 & 1440; `npm run build` dan `npm run test:run` hijau |
+| M2 | Drizzle schema + migrasi + seed + repository + unit test logika + `lib/audit.ts` | `npm run db:migrate` jalan; seed menghasilkan 1 event + 4 room; semua query filter `deleted_at` |
 | M3 | Auth (`lib/auth/`) + middleware + login/invite | Guest bisa masuk via invite; owner bisa masuk |
-| M4 | CRUD event/room/item + halaman user + kartu lagu | Konten tampil di user dan bisa diedit di admin; hapus = soft delete |
+| M4 | CRUD event/room/item + halaman user + kartu lagu | Konten tampil di user dan bisa diedit di admin; hapus = soft delete + audit |
 | M5 | Upload Cloudinary + R2 + poster canvas | Foto HEIC dari iPhone tampil di Chrome Android |
-| M6 | Visits + dashboard history + statistik | Aksi tercatat; data tidak bisa dihapus dari UI |
+| M6 | Visits + dashboard history + statistik + tab perubahan | Aksi tercatat; data tidak bisa dihapus dari UI |
 | M7 | Gate toggle + notifikasi Telegram | Gate berubah; pesan masuk ke Telegram |
 | M8 | PWA + polish + a11y | Terinstal di iPhone 13 & Android; Lighthouse ≥ 90 |
 
@@ -453,7 +478,7 @@ NEXT_PUBLIC_GA_ID=
 
 ## 15. Keputusan Final
 
-Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-026).**
+Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-034).**
 
 | Topik | Keputusan |
 |---|---|
@@ -467,6 +492,9 @@ Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap:
 | Tanggal 17 Sep 2026 | Tidak ditampilkan di UI |
 | Hapus konten | `owner` + `editor`; soft delete untuk semua tabel |
 | Zona waktu | `Asia/Jakarta` |
+| Repo & proteksi | Publik; tidak ada push langsung ke `main`; wajib PR + CI hijau |
+| Testing | Vitest, coverage `lib/` ≥ 80%, wajib hijau di CI |
+| Audit log | Setiap mutasi data dicatat di `audit_logs` (append-only, `before`/`after`) |
 
 ---
 
@@ -482,3 +510,78 @@ Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap:
 | Media yatim | File menumpuk permanen di R2/Cloudinary | Diterima (D-018); bersihkan manual dari dashboard provider |
 | Baris soft-deleted menumpuk | Ruang DB 0,5 GB terpakai | Pantau; arsip manual saat mendekati batas |
 | AI menulis di luar pola | Kode berantakan | `docs/agent-rules.md` |
+
+---
+
+## 17. CI/CD & Pengujian
+
+### 17.1 Model branch
+
+```
+main                 ← produksi; hanya menerima merge dari PR
+feat/<ringkas>       fix/<ringkas>      chore/<ringkas>      db/<ringkas>
+```
+
+**Dilarang push langsung ke `main`**, termasuk oleh owner. Alur wajib: buat branch → commit → push branch → PR → CI hijau → squash merge → branch dihapus.
+
+### 17.2 Ruleset `main`
+
+Diterapkan sebagai GitHub Ruleset (`bypass_actors` kosong, tidak ada pengecualian):
+
+| Aturan | Efek |
+|---|---|
+| `deletion` | branch `main` tidak bisa dihapus |
+| `non_fast_forward` | force-push ditolak |
+| `pull_request` | wajib PR; 0 approval karena dikerjakan sendiri; thread wajib selesai |
+| `required_status_checks` | job `verify` wajib hijau, `strict` (harus rebase ke `main` terbaru) |
+
+Repo bersifat **publik** agar ruleset dan Actions gratis tanpa batas menit.
+
+### 17.3 Workflow
+
+| File | Pemicu | Isi |
+|---|---|---|
+| `.github/workflows/ci.yml` | push `main` + PR | `npm ci` → cek migrasi ter-commit → typecheck → lint → test → build |
+| `.github/workflows/migrate.yml` | manual + input `MIGRATE` | `db:migrate` ke Neon |
+| `.github/workflows/backup.yml` | cron 18.00 UTC (01.00 WIB) | dump DB ke R2 |
+
+Aturan CI:
+- `npx drizzle-kit generate` dilanjutkan `git diff --exit-code drizzle/` — PR gagal jika skema berubah tanpa migrasi.
+- **Build tidak boleh menyentuh database.** Halaman yang membaca gate wajib `dynamic`; nilai `NEXT_PUBLIC_*` diisi dummy saat CI.
+- Migrasi **tidak** dijalankan otomatis saat merge; SQL hasil generate wajib dibaca lebih dulu.
+
+### 17.4 Unit test
+
+Runner **Vitest** + Testing Library, environment `node` (komponen memakai docblock `jsdom`). File test berdampingan dengan sumbernya: `lib/visits.ts` → `lib/visits.test.ts`.
+
+| Diuji | Tidak diuji |
+|---|---|
+| Zod schema (slug, caption, host lagu, kode invite) | Server Component Next (E2E) |
+| `hasMinRole`, validasi invite | Query repository & migrasi (Neon branch) |
+| dedupe `room_view` 60 detik, `session_hash`, `logout` | Upload Cloudinary/R2 (manual M5) |
+| URL builder Cloudinary, key R2, batas 500 MB | |
+| `format-date` Asia/Jakarta | |
+| `lib/audit.ts` — bentuk payload `before`/`after`, penolakan field rahasia | |
+| komponen UI kecil dan `song-card` | |
+
+- Threshold coverage: **80% baris & fungsi** untuk `lib/` dan `components/`; `app/` dikecualikan.
+- Fungsi yang diuji harus menerima `now` sebagai parameter dan dipisah dari I/O.
+- `lib/db` selalu di-mock; unit test tidak pernah membuka koneksi.
+
+### 17.5 Deploy
+
+Integrasi Git Vercel, tanpa pipeline deploy sendiri:
+
+| Kejadian | Hasil |
+|---|---|
+| PR dibuka/diupdate | preview deployment |
+| Merge ke `main` | production deployment |
+
+### 17.6 Rahasia
+
+GitHub Actions: `DATABASE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+Vercel: seluruh variabel §14, dipisah Production dan Preview. Secret tidak pernah masuk `NEXT_PUBLIC_*`.
+
+### 17.7 Anggaran
+
+Semua komponen CI/CD di atas gratis: Actions tanpa batas menit untuk repo publik, Vercel Hobby, Neon Free, R2 Free, Cloudinary Free, Firebase Spark.
