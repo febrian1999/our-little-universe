@@ -19,6 +19,7 @@ Urutan baca yang disarankan:
 4. **Ubah sesedikit mungkin.** Jangan refactor file yang tidak berkaitan dengan tugas.
 5. **Kalau ragu, berhenti dan tanya.** Lebih baik satu pertanyaan daripada satu migrasi yang salah.
 6. **Tidak ada hard delete.** Semua penghapusan soft delete, dan media tidak ikut dihapus.
+7. **Framework dan library read-only.** Error diperbaiki di cara memanggil, bukan dengan mengedit sumber pihak ketiga.
 
 ---
 
@@ -145,6 +146,7 @@ Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
 25. Menyajikan file upload lewat domain aplikasi (`rewrite`, route handler, atau optimizer).
 26. `pull_request_target`, atau workflow yang memegang secret tanpa Actions yang di-pin ke SHA.
 27. OG image atau metadata dinamis yang membaca database.
+28. Mengedit `node_modules/**`, source framework/library, atau `.next/**`; memakai `patch-package`/`pnpm patch`; mem-fork atau menyalin file library ke repo untuk diubah.
 
 ---
 
@@ -227,6 +229,22 @@ Jangan menampilkan pesan error mentah dari database ke UI.
 3. pastikan tidak ada duplikasi dalam 60 detik
 ```
 
+### 5.4 Menghadapi error dari framework atau library
+
+```
+1. baca pesan error + tipe + dokumentasi versi yang terpasang
+2. perbaiki cara memanggil API kita (tipe, argumen, await, params Promise)
+3. jika perlu, ubah konfigurasi milik repo (next.config.ts, tsconfig.json, vitest.config.ts)
+4. jika masih gagal, cek bug versi → naikkan/turunkan versi di package.json + catat di decisions.md
+5. jika API tidak cocok, buat adapter di lib/, jangan ubah library
+6. fork/patch hanya boleh lewat keputusan baru dan persetujuan Ian
+```
+
+- `node_modules/**`, source Next.js/React/Drizzle/Tailwind/SDK, dan `.next/**` tidak boleh diedit.
+- Jangan memakai `patch-package`, `pnpm patch`, monkey-patch, atau `require.cache`.
+- File library yang disalin ke repo lalu diubah dianggap pelanggaran yang sama.
+- Konfigurasi milik repo tetap boleh diubah; itu bukan bagian dari library.
+
 ---
 
 ## 6. Definisi Selesai (Definition of Done)
@@ -253,6 +271,8 @@ Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
 - [ ] `next/image` hanya host eksplisit; SVG tidak diizinkan
 - [ ] Tidak ada upload yang disajikan lewat domain aplikasi
 - [ ] Tidak ada workflow `pull_request_target`; Actions dengan secret di-pin ke SHA
+- [ ] `git status` tidak menunjukkan perubahan di `node_modules/`, `.next/`, atau file library
+- [ ] Tidak ada `patch-package`, fork library, atau file library yang disalin ke repo
 - [ ] Jika skema berubah: migrasi ada, `docs/schema.md` diperbarui
 - [ ] Jika route baru: aturan akses sesuai PRD §4 dan ditegakkan di server
 - [ ] Tampilan diuji di 360 px dan 1440 px, tanpa scroll horizontal
@@ -458,3 +478,16 @@ Saran    : <pilihan + alasan>
 ```
 
 Jangan mengambil keputusan yang mengubah skema, biaya, atau hak akses tanpa persetujuan Ian.
+
+Jika masalahnya berasal dari framework atau library:
+
+```
+Konteks  : <versi paket + API yang dipanggil>
+Gejala   : <error persis>
+Sudah    : <perbaikan call site yang dicoba>
+Opsi A   : <workaround di kode kita>
+Opsi B   : <naik/turun versi + risiko>
+Saran    : <pilihan + alasan>
+```
+
+Fork, patch, atau mengedit sumber library **tidak** diambil sebagai jalan pintas tanpa persetujuan eksplisit.
