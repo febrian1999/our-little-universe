@@ -746,6 +746,7 @@ npx drizzle-kit migrate
 Aturan:
 - **Jangan pernah** mengedit file di `drizzle/` secara manual.
 - Migrasi yang sudah jalan **tidak boleh** diubah isinya; buat migrasi baru.
+- `drizzle-kit` membaca `DATABASE_URL_UNPOOLED` (koneksi langsung). Pooler tidak mendukung DDL dengan andal, jadi migrasi lewat `DATABASE_URL` dilarang.
 - Setiap migrasi harus bisa jalan dari database kosong (uji dengan `drizzle-kit migrate` di Neon branch baru).
 - Perubahan yang merusak (drop kolom) harus dua tahap: (1) berhenti memakai, (2) drop setelah rilis berikutnya. Ini satu-satunya pengecualian aturan soft delete.
 - Migrasi menambah kolom audit baru: beri default agar baris lama valid, lalu `updated_by`/`deleted_by` boleh `null`.

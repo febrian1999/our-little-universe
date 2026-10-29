@@ -4,10 +4,14 @@ Dokumen ini adalah kontrak kerja untuk AI agent (dan manusia) yang mengubah repo
 Baca file ini **sebelum** menulis kode.
 
 Urutan baca yang disarankan:
-1. `docs/agent-rules.md` (file ini)
-2. `docs/PRD.md` bagian 3, 4, 7
-3. `docs/schema.md` bagian 3 dan 4
-4. `lib/db/schema.ts`
+1. `AGENTS.md` (root, ditulis `next dev`)
+2. `docs/agent-rules.md` (file ini)
+3. `docs/PRD.md` bagian 3, 4, 7, 17
+4. `docs/schema.md` bagian 3 dan 4
+5. `node_modules/next/dist/docs/` untuk API Next.js versi terpasang
+6. `lib/db/schema.ts`
+
+`docs/manual-setup.md` berisi langkah yang **hanya bisa dilakukan pemilik akun** (GitHub, Neon, Cloudinary, R2, Firebase, Vercel). Agent tidak boleh mengarang kredensial atau menganggap langkah itu sudah selesai.
 
 ---
 
@@ -89,7 +93,8 @@ scripts/
 tests/
   setup.ts
 vitest.config.ts
-middleware.ts
+proxy.ts                           redirect ringan (bukan middleware.ts)
+AGENTS.md                          aturan agent dari next dev (di-commit)
 ```
 
 File test berdampingan dengan sumbernya (`lib/visits.test.ts`), bukan di folder terpisah.
@@ -112,6 +117,7 @@ Tidak ada folder route per room. Semua room memakai `[roomKey]`; halaman memilih
 | Cek Origin / header keamanan | `lib/security/` |
 | Normalisasi URL, `?next=`, dan path kunjungan | `lib/security/urls.ts`, `lib/security/paths.ts` |
 | `robots.txt` | `app/robots.ts` |
+| Redirect ringan / rewrite | `proxy.ts` (bukan `middleware.ts`) |
 
 ---
 
@@ -272,6 +278,8 @@ Jangan menampilkan pesan error mentah dari database ke UI.
 
 Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
 
+> Karena `development` tidak melewati CI (D-047), poin verifikasi di bawah adalah satu-satunya gerbang sebelum push. Jangan menyerahkan pekerjaan yang belum lolos.
+
 - [ ] `npm run typecheck` hijau
 - [ ] `npm run lint` hijau
 - [ ] `npm run test:run` hijau
@@ -298,6 +306,8 @@ Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
 - [ ] `rooms.kind` dihormati: room `playlist` tidak merender feed, room `feed` tidak merender playlist
 - [ ] URL playlist kanonik (`https://open.spotify.com/playlist/{22}`), tanpa `?si=`, dan embed dibentuk server
 - [ ] Jika skema berubah: migrasi ada, `docs/schema.md` diperbarui
+- [ ] Tidak memakai `export const dynamic`; data dinamis dibungkus `<Suspense>`
+- [ ] Jika menangani redirect/request, memakai `proxy.ts`, bukan `middleware.ts`
 - [ ] Jika route baru: aturan akses sesuai PRD §4 dan ditegakkan di server
 - [ ] Tampilan diuji di 360 px dan 1440 px, tanpa scroll horizontal
 - [ ] Fokus keyboard terlihat pada elemen interaktif baru
@@ -323,7 +333,9 @@ npm run db:studio      # drizzle-kit studio
 npm run db:seed        # tsx scripts/seed.ts
 ```
 
-Semua perintah ini harus ada di `package.json` sejak M1.
+Semua perintah ini harus ada di `package.json` sejak M1. `next lint` sudah tidak ada; script `lint` memanggil `eslint` langsung. `next dev` dan `next build` memakai Turbopack secara default.
+
+Perintah `db:*` dan `scripts/backup.ts` memakai `DATABASE_URL_UNPOOLED` (koneksi langsung Neon). Runtime aplikasi memakai `DATABASE_URL` (pooled). Jangan menjalankan migrasi lewat pooler.
 
 ---
 
@@ -352,22 +364,27 @@ await db.delete(items).where(eq(items.id, id));
 
 ### Next.js 16
 
-Turbopack adalah bundler default. `params` dan `searchParams` tetap **Promise**:
-```ts
-export default async function Page({ params }: { params: Promise<{ chapter: string }> }) {
-  const { chapter } = await params;
-}
-```
+Versi terpasang **16.4.3**. Konvensinya berbeda dari Next.js lama:
 
+- **Middleware bernama Proxy.** File `proxy.ts` di root, fungsi `proxy(request)`. Tidak ada `middleware.ts`.
+- **Cache Components aktif** (`cacheComponents: true`, `partialPrefetching: true`). Tidak ada `export const dynamic`, `experimental.ppr`, atau `runtime` export.
+- Data yang harus segar (DB, `cookies()`, `headers()`) dibungkus `<Suspense>`; jangan memakai `use cache` untuk data privat.
+- `params` dan `searchParams` tetap **Promise**. Pakai helper tipe global:
+  ```ts
+  export default async function Page(props: PageProps<'/[chapter]/[roomKey]'>) {
+    const { chapter, roomKey } = await props.params;
+  }
+  ```
 - `next.config.ts`: `poweredByHeader: false`; `images.remotePatterns` hanya host eksplisit (Cloudinary, R2, thumbnail YouTube); `dangerouslyAllowSVG: false`.
 - Jangan membuat `opengraph-image` yang membaca database.
 - `redirect()` hanya ke path internal hasil `safeNextPath()`.
+- Sebelum memakai API yang belum dikenal, baca `node_modules/next/dist/docs/` (versi terpasang), bukan materi dari ingatan.
 
 ### Tailwind 4
 
 - Tidak ada `tailwind.config.js`. Konfigurasi lewat CSS: `@import "tailwindcss";` lalu blok `@theme`.
 - Warna tema (`primary`, `accent`) dideklarasikan di `@theme`, bukan di JS.
-- Jangan menambah `postcss.config` lain selain `@tailwindcss/postcss`.
+- Loader memakai `@tailwindcss/turbopack` melalui `turbopack.rules` di `next.config.ts`. Jangan menambah `postcss.config` atau loader kedua.
 
 ### Responsif
 
@@ -403,7 +420,7 @@ export default async function Page({ params }: { params: Promise<{ chapter: stri
 
 - Semua akses lewat `lib/auth/index.ts`. Jangan mengimpor `firebase-admin` di komponen.
 - `requireRole()` dipanggil di Server Component/Action, bukan di client.
-- `middleware.ts` hanya untuk redirect, bukan satu-satunya pengecekan.
+- `proxy.ts` hanya untuk redirect, bukan satu-satunya pengecekan.
 
 ### Keamanan
 
@@ -437,6 +454,8 @@ export function assertSameOrigin(request: Request): void {
 
 ## 9. Hemat Konteks (untuk AI)
 
+Sebelum menebak API framework, baca `AGENTS.md` di root dan dokumentasi versi terpasang di `node_modules/next/dist/docs/`. Jangan mengandalkan ingatan tentang Next.js versi lama.
+
 1. Jangan membaca seluruh repo. Baca `@file` yang relevan saja.
 2. Sebelum mencari fungsi, cek `lib/db/repositories/` dan `lib/auth/` lebih dulu.
 3. Kalau butuh mengubah pola yang dipakai di banyak tempat, tanyakan dulu — jangan refactor massal tanpa izin.
@@ -452,21 +471,29 @@ export function assertSameOrigin(request: Request): void {
 ### Branch
 
 ```
-main            ← produksi, tidak boleh di-push langsung
-feat/<ringkas>  fix/<ringkas>  chore/<ringkas>  db/<ringkas>
+main            ← produksi / CI-CD; hanya PR rilis dari development
+development     ← branch kerja harian; tanpa ruleset, tanpa CI
+feat/<ringkas>  fix/<ringkas>  chore/<ringkas>  db/<ringkas>  docs/<ringkas>
+                  dibuat dari development
 ```
 
-Alur wajib:
+Alur harian:
 
 ```bash
+git switch development
 git switch -c feat/nama-ringkas
 # ...kerja...
+npm run typecheck && npm run lint && npm run test:run
 git add -A && git commit -m "feat(scope): ringkasan"
-git push -u origin feat/nama-ringkas
-gh pr create --fill
-# tunggu job `verify` hijau
-gh pr merge --squash --delete-branch
+git switch development
+git merge --squash feat/nama-ringkas
+git push origin development
+git branch -d feat/nama-ringkas
 ```
+
+Alur rilis: PR `development` → `main`; CI `verify` berjalan di PR dan wajib hijau. Merge ke `main` adalah satu-satunya pemicu deploy produksi. Jangan push langsung ke `main`; `development` boleh di-push bebas.
+
+Karena CI tidak berjalan di `development`, kegagalan yang lolos baru terlihat saat PR rilis. Selalu jalankan tiga perintah verifikasi di atas sebelum commit.
 
 ### Format commit
 
