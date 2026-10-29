@@ -65,21 +65,21 @@ Setelah itu bersihkan referensi lokal: `git fetch --prune`.
 
 **Settings → Rules → Rulesets → New ruleset → New branch ruleset**
 
-- [ ] Name: `main`
-- [ ] Enforcement status: **Active**
-- [ ] Bypass list: **kosong** (admin pun tunduk)
-- [ ] Target branches → Add target → **Include by pattern** → `main`
+- [x] Name: `main`
+- [x] Enforcement status: **Active**
+- [x] Bypass list: **kosong** (admin pun tunduk)
+- [x] Target branches → Add target → **Include by pattern** → `main`
 
 Branch rules:
 
-- [ ] **Restrict deletions**
-- [ ] **Block force pushes**
-- [ ] **Require a pull request before merging**
+- [x] **Restrict deletions**
+- [x] **Block force pushes**
+- [x] **Require a pull request before merging**
   - Required approvals: **0**
-  - [ ] Require conversation resolution before merging
-- [ ] **Require status checks to pass**
-  - [ ] Add checks → `verify`
-  - [ ] Require branches to be up to date before merging
+  - [x] Require conversation resolution before merging
+- [x] **Require status checks to pass**
+  - [x] Add checks → `verify`
+  - [x] Require branches to be up to date before merging
 
 `development` **tidak** dibuatkan ruleset (D-047). Branch itu boleh di-push bebas sebagai backup pekerjaan.
 
