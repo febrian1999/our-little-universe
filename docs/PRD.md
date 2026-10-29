@@ -1,9 +1,9 @@
 # PRD — Our Little Universe
 
-**Versi:** 2.5
+**Versi:** 2.6
 **Status:** Final — siap implementasi
 **Pemilik:** Ian
-**Update terakhir:** 2026-10-28
+**Update terakhir:** 2026-10-29
 **Asal:** project mangkrak `mybf.ian-gift` (Echa)
 **Target biaya:** Rp 0
 **Dokumen terkait:** `docs/schema.md`, `docs/agent-rules.md`, `docs/decisions.md`
@@ -506,7 +506,7 @@ NEXT_PUBLIC_GA_ID=
 
 ## 15. Keputusan Final
 
-Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-040).**
+Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-041).**
 
 | Topik | Keputusan |
 |---|---|
@@ -525,6 +525,7 @@ Diputuskan 2026-10-28. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap:
 | Audit log | Setiap mutasi data dicatat di `audit_logs` (append-only, `before`/`after`) |
 | Keamanan | Header wajib, cookie `__Host-`, cek Origin, tanpa seed produksi, CSP bertahap |
 | Anti-penyalahgunaan | Seluruh situs `noindex`; landing statis; preview terautentikasi; tanpa auto-link/rich text; media tidak diproksikan |
+| Framework & library | Read-only; error diperbaiki di call site atau versi; fork/patch butuh keputusan baru |
 
 ---
 
@@ -709,6 +710,7 @@ Semua komponen CI/CD di atas gratis: Actions tanpa batas menit untuk repo publik
 - `npm audit --omit=dev` di CI, gagal pada tingkat `high`.
 - Dependency baru wajib dicatat di `docs/decisions.md`.
 - Dependabot mingguan untuk npm dan GitHub Actions; diff lockfile dibaca sebelum merge.
+- **Framework dan library read-only.** `node_modules/**`, source Next.js/React/Drizzle/Tailwind/SDK, dan `.next/**` tidak diedit. Error diperbaiki di call site atau lewat perubahan versi; fork/patch hanya lewat keputusan baru.
 
 ### 18.10 Verifikasi keamanan
 

@@ -50,6 +50,7 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 | D-038 | 2026-10-28 | Env Preview | `DATABASE_URL` pada environment Preview Vercel wajib menunjuk Neon branch, bukan database produksi | PR terbuka bisa merusak data asli | Uji migrasi dan login preview memakai branch terpisah |
 | D-039 | 2026-10-28 | Postur anti-penyalahgunaan | `robots.txt` + `X-Robots-Tag` noindex di semua respons, landing statis, preview via Vercel Authentication, caption tanpa auto-link/HTML, media tidak diproksikan lewat domain aplikasi | Situs ini sasaran potensial spam judol/adware; nilai SEO dan jalur tulis harus dibuat nol | Rincian di PRD §18.11; preview butuh login Vercel; tidak ada OG dinamis |
 | D-040 | 2026-10-28 | Hardening akun & supply chain | 2FA/passkey di GitHub/Vercel/Cloudflare/Neon/Firebase, secret scanning + push protection, Actions pin SHA, `npm ci --ignore-scripts`, playbook insiden | Kredensial dan build script adalah jalur masuk yang tersisa | Rincian PRD §18.12; postinstall hanya untuk paket yang di-allowlist; secret yang pernah masuk git wajib dirotasi |
+| D-041 | 2026-10-29 | Framework & library read-only | `node_modules/**`, source framework/library, dan `.next/**` tidak diedit; error diperbaiki di call site atau lewat perubahan versi; `patch-package`/fork dilarang tanpa keputusan baru | Perubahan di library hilang saat install ulang dan menyembunyikan penyimpangan | Aturan di agent-rules §1, §3 #28, §5.4; patch/fork wajib persetujuan |
 
 ---
 
@@ -64,4 +65,4 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 ## Catatan
 
 - Keputusan stack (Next.js 16.4.3, Drizzle, Neon, Firebase Auth, Cloudinary, R2, Vercel, Serwist) ada di `docs/PRD.md` §3 dan sudah mengikat.
-- D-001 s.d. D-040 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
+- D-001 s.d. D-041 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
