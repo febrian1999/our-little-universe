@@ -1,6 +1,6 @@
 # PRD — Our Little Universe
 
-**Versi:** 2.6
+**Versi:** 2.7
 **Status:** Final — siap implementasi
 **Pemilik:** Ian
 **Update terakhir:** 2026-10-29
@@ -23,9 +23,9 @@
 
 Dipertahankan:
 - Konsep "Gate" sebagai pintu masuk.
-- Nama ruangan: Homepage, Touring, Healing, Music.
+- Nama ruangan awal: Touring, Healing, Music.
 - Narasi Princess × Guardian.
-- Tanggal 17 September 2026 disimpan sebagai data (`events.starts_at`), **tidak ditampilkan** di UI.
+- Tanggal 17 September 2026 disimpan sebagai data (`chapters.starts_at`), **tidak ditampilkan** di UI.
 
 Dibuang:
 - `guardian-syc-firebase.js` (dead code, tidak pernah di-import).
@@ -33,6 +33,21 @@ Dibuang:
 - Status guardian yang di-hardcode di landing page.
 - Tombol gate yang rusak (`<button> onclick="openGate()"🔒 Open The Gate</button>` — atribut masuk ke text content).
 - Firebase Hosting dan Firestore sebagai database.
+
+### 1.2 Referensi project lama (hanya visual)
+
+Dua halaman project lama dipakai sebagai **acuan tampilan**, bukan dependency runtime:
+
+| Halaman | URL | Yang diambil |
+|---|---|---|
+| Music Room | `https://echaprincess.github.io/mybf.ian-gift/music-room.html` | Susunan kartu playlist Spotify dan tombol "buka di Spotify" |
+| Castle Map | `https://echaprincess.github.io/mybf.ian-gift/castle-map.html` | Grid pintu room sebagai menu utama |
+
+Aturan:
+- Tidak di-iframe, tidak `fetch`, tidak dijadikan build step. Repo ini tidak bergantung pada GitHub Pages.
+- Tidak ada 18 room tetap; jumlah pintu mengikuti tabel `rooms` (D-043).
+- Tidak ada bagian artist corner, mood, atau song memory dari halaman lama; playlist hanya kontainer tautan (D-042).
+- Jika halaman lama hilang, aplikasi tetap berjalan.
 
 ---
 
@@ -42,14 +57,17 @@ Dibuang:
 
 - Login (Google + email link) dengan role `owner` / `editor` / `guest`.
 - Gate yang bisa dibuka/tutup manual oleh owner.
-- Multi-event (satu instalasi bisa menampung beberapa momen, mis. anniversary, ulang tahun).
-- Empat ruangan per event, dapat ditambah/diubah.
+- Multi-chapter (satu instalasi bisa menampung beberapa bab cerita, mis. anniversary, ulang tahun).
+- Room dinamis per chapter: tambah/ubah dari admin, tanpa mengedit kode.
+- Dua jenis room: `feed` (postingan) dan `playlist` (kontainer Spotify). Keduanya tidak dicampur dalam satu halaman (D-042).
+- Castle map sebagai menu utama setelah login, dirender dari tabel `rooms` (D-043).
 - CRUD konten (teks, foto, video, lagu).
 - Upload foto (Cloudinary) dan video (Cloudflare R2) — hanya `owner`/`editor`.
 - Undangan berbasis kode + batas pemakaian.
 - History append-only yang tidak pernah dihapus.
 - Dashboard admin: KPI, timeline, pengelolaan konten.
 - Lagu tempelan opsional di setiap postingan (kartu + embed).
+- Playlist Spotify per room playlist, dikelola dari admin.
 - PWA yang bisa diinstal di iPhone 13 dan Android.
 - Notifikasi Telegram yang bisa dimatikan.
 - Penghapusan bersifat **soft delete** — tidak ada hard delete, data tidak hilang permanen.
@@ -61,7 +79,7 @@ Dibuang:
 ### 2.2 Di luar v1.0
 
 - Komentar, chat, reaksi emoji, guestbook, form kontak.
-- Halaman publik yang menampilkan isi event/room (termasuk OG image dinamis).
+- Halaman publik yang menampilkan isi chapter/room (termasuk OG image dinamis).
 - Multi-tenant (banyak pasangan dalam satu instalasi).
 - Pembayaran.
 - Email transaksional.
@@ -112,8 +130,8 @@ Selama tiga fungsi itu tersedia, implementasi di baliknya boleh diganti (mis. ke
 
 | Role | Hak |
 |---|---|
-| `owner` | Semua; menghapus event; mengubah role user; membuka/menutup gate; mengatur notifikasi |
-| `editor` | Menambah/edit/hapus event, room, dan item; upload media; tidak bisa mengubah role |
+| `owner` | Semua; menghapus chapter; mengubah role user; membuka/menutup gate; mengatur notifikasi |
+| `editor` | Menambah/edit/hapus chapter, room, item, dan playlist; upload media; tidak bisa mengubah role |
 | `guest` | Membaca semua ruangan (`min_role = guest`); **tidak bisa** upload, edit, atau hapus |
 
 Aturan akses halaman:
@@ -123,15 +141,15 @@ Aturan akses halaman:
 | `/` | publik |
 | `/login` | publik |
 | `/invite/[code]` | publik (redeem butuh login) |
-| `/[eventSlug]` | login (semua role) |
-| `/[eventSlug]/[roomKey]` | login + `role >= room.min_role` |
+| `/[chapter]` | login (semua role) — castle map |
+| `/[chapter]/[roomKey]` | login + `role >= room.min_role` |
 | `/admin/**` | `owner` atau `editor` |
 
 Semua pengecekan role dilakukan **di server** (middleware + repository), tidak pernah hanya di client.
 
 Semua room — termasuk `healing` — memakai `min_role = guest`. Pembatasan tulis murni berbasis role: hanya `owner` dan `editor`.
 
-`owner` dan `editor` sama-sama boleh menghapus event, room, dan item. Semua penghapusan adalah **soft delete** (`deleted_at` + `deleted_by`); tidak ada `DELETE` di aplikasi dan tidak ada UI pemulihan di v1.
+`owner` dan `editor` sama-sama boleh menghapus chapter, room, item, dan playlist. Semua penghapusan adalah **soft delete** (`deleted_at` + `deleted_by`); tidak ada `DELETE` di aplikasi dan tidak ada UI pemulihan di v1.
 
 ---
 
@@ -142,7 +160,7 @@ Semua room — termasuk `healing` — memakai `min_role = guest`. Pembatasan tul
 ```
 /  → klik "Open The Gate"
    ├─ gate tertutup → tampilkan "Belum dibuka", tombol disabled
-   └─ gate terbuka  → /login jika belum ada sesi → /[eventSlug]
+   └─ gate terbuka  → /login jika belum ada sesi → /[chapter]
 ```
 
 `visits` mencatat `gate_open` saat gate berhasil dilewati.
@@ -158,14 +176,14 @@ Guest buka link → login → POST redeem
 
 Redeem dicatat sebagai `invite_redeem` di `visits`.
 
-Halaman `/invite/[code]` sebelum login hanya menampilkan copy generik dan tombol login. Tidak ada judul event, nama owner, atau detail undangan dari database yang dirender ke publik. Validasi kode terjadi di server setelah sesi ada.
+Halaman `/invite/[code]` sebelum login hanya menampilkan copy generik dan tombol login. Tidak ada judul chapter, nama owner, atau detail undangan dari database yang dirender ke publik. Validasi kode terjadi di server setelah sesi ada.
 
 ### 5.3 Guardian Connect
 
 Dipertahankan dari project lama, disederhanakan:
 
 ```
-Login → halaman /[eventSlug]/connect
+Login → halaman /[chapter]/connect
   → isi nama + birthday (opsional)
   → POST → settings['guardian'] = { name, birthday, lastSeen }
   → visits(action='connect')
@@ -178,7 +196,7 @@ Login → halaman /[eventSlug]/connect
 Hanya `owner` dan `editor`. `guest` tidak melihat tombol ini dan endpoint upload menolaknya di server.
 
 ```
-/admin → pilih event → pilih room → "Tambah item"
+/admin → pilih chapter → pilih room → "Tambah item"
 
 foto     → POST /api/upload/sign            → upload langsung ke Cloudinary
            → simpan { type:'photo', provider:'cloudinary', public_id, width, height }
@@ -188,9 +206,12 @@ video    → POST /api/upload/r2/presign      → PUT langsung browser ke R2
 video >500 MB → tempel URL YouTube unlisted → simpan { type:'video', provider:'youtube', url }
 lagu     → tempel URL Spotify/YouTube       → simpan { type:'song', provider:'spotify', url }
 teks     → tulis langsung                   → simpan { type:'text', caption }
+playlist → tempel URL Spotify (room playlist) → simpan { provider:'spotify', url, title, sort_order }
 ```
 
 Setiap item non-lagu boleh diberi **satu lagu tempelan** lewat `song_provider`, `song_url`, `song_title`, `song_start_s`. Kartu lagu memutar embed; autoplay dicoba, dan jika browser memblokir, pemutaran dimulai pada sentuhan pertama di ruangan. Musik berhenti saat pindah room.
+
+Playlist hanya ditambahkan ke room bertipe `playlist`; URL di-kanonikkan ke `https://open.spotify.com/playlist/{id}` dan disimpan tanpa `?si=`. Feed postingan tetap berada di room `feed`, tidak di room playlist.
 
 Upload dicatat sebagai `upload` di `visits`.
 
@@ -198,7 +219,7 @@ Upload dicatat sebagai `upload` di `visits`.
 
 ```
 /admin → toggle gate
-  → update events.gate_open
+  → update chapters.gate_open
   → visits(action='gate_toggle')
   → halaman gate di landing langsung berubah (revalidasi / polling)
 ```
@@ -208,22 +229,25 @@ Upload dicatat sebagai `upload` di `visits`.
 ## 6. Peta Halaman
 
 ```
-/                                  landing + gate
+/                                  landing + gate (copy statis)
 /login                             login
 /auth/action                       penyelesaian email link Firebase
 /invite/[code]                     redeem undangan
-/[eventSlug]                       universe home (layout B)
-/[eventSlug]/[roomKey]             ruangan
-/[eventSlug]/connect               guardian connect
+/[chapter]                         castle map / menu utama (layout B)
+/[chapter]/[roomKey]               room feed
+/[chapter]/music                   room playlist (kontainer Spotify)
+/[chapter]/connect                 guardian connect
 /admin                             dashboard (layout C)
-/admin/events                      daftar event
-/admin/events/[id]                 detail event + daftar room
-/admin/events/[id]/rooms/[roomId]  daftar item + form item
+/admin/chapters                    daftar chapter
+/admin/chapters/[id]               detail chapter + daftar room
+/admin/chapters/[id]/rooms/[roomId]  item feed atau daftar playlist
 /admin/media                       pustaka media
 /admin/access                      invite + daftar user
 /admin/history                     timeline kunjungan + log perubahan
 /admin/settings                    gate, notifikasi, analytics
 ```
+
+`/[chapter]/music` hanya contoh key seed. Semua room memakai `[roomKey]` yang sama; isi halaman ditentukan `rooms.kind` (D-043).
 
 ---
 
@@ -239,18 +263,52 @@ Upload dicatat sebagai `upload` di `visits`.
 
 ### 7.2 Layout per area
 
-**User → Opsi B (two column)**
+**Landing `/` → gate card**
+```
+┌──────────────────────────┐
+│  ambient layer (fixed)   │
+│                          │
+│   ╭──────────────────╮   │
+│   │  copy statis     │   │
+│   │  status gate     │   │
+│   │  [ Open The Gate]│   │
+│   ╰──────────────────╯   │
+└──────────────────────────┘
+        max-w-md
+```
+
+**Castle map `/[chapter]` → layout B (two column)**
 ```
 Desktop ≥1024px                     Mobile <1024px
 ┌──────────┬──────────────────┐     ┌──────────────┐
-│ identitas│  grid ruangan    │     │ identitas    │
+│ identitas│  grid pintu room │     │ identitas    │
 │ status   │  1/2/3 kolom     │     ├──────────────┤
-│ nav      │  feed terbaru    │     │  grid 1 kolom│
+│ nav      │                  │     │ grid 1 kolom │
 │ (sticky) │                  │     │              │
 └──────────┴──────────────────┘     ├──────────────┤
  260px       max-w-6xl              │ bottom nav   │
-└──────────────┘
+                                    └──────────────┘
 ```
+
+Pintu dirender dari `rooms` sesuai `sort_order`. Tidak ada daftar key di kode dan tidak ada penghitung "x/y room"; jumlah pintu mengikuti database.
+
+**Room `feed` → daftar item**
+```
+header room (ikon, judul, deskripsi)
+├─ kartu item (teks / foto / video / lagu)
+├─ kartu item
+└─ paginasi 24
+```
+
+**Room `playlist` → kontainer Spotify**
+```
+header room (ikon, judul, deskripsi)
+├─ kartu playlist: judul + tombol putar
+├─ kartu playlist
+└─ satu iframe Spotify aktif (dimuat setelah diketuk)
+```
+
+Room playlist **tidak** menampilkan feed (D-042). Tombol "Buka di Spotify" tersedia sebagai fallback.
 
 **Admin → Opsi C (dashboard grid)**
 ```
@@ -268,8 +326,9 @@ Desktop ≥1024px                     Mobile <1024px
 | Layar | Kriteria |
 |---|---|
 | Gate | Kartu `max-w-md`; tombol disabled + pesan jelas saat gate tutup; tanpa scroll horizontal di 360 px; **copy statis**, hanya status buka/tutup dari DB |
-| User home | Sidebar sticky tidak menutupi konten; grid 1/2/3 kolom; bottom nav mobile tidak menutupi item terakhir (`pb-24`) |
-| Room | Video `preload="metadata"` + poster; gambar `srcset` 3 ukuran; lightbox bisa ditutup dengan Esc |
+| Castle map | Pintu dari database, urut `sort_order`; grid 1/2/3 kolom; pintu terkunci menampilkan status; tidak ada jumlah room hardcode |
+| Room feed | Video `preload="metadata"` + poster; gambar `srcset` 3 ukuran; lightbox bisa ditutup dengan Esc |
+| Room playlist | Kartu playlist dari database; satu iframe aktif; tidak ada autoplay; tanpa scroll horizontal di 360 px |
 | Admin | Tabel boleh horizontal-scroll di dalam wrapper sendiri, bukan seluruh halaman |
 | History | Default menyembunyikan `visible=false`; ada toggle "tampilkan semua"; filter per action dan rentang tanggal |
 
@@ -305,6 +364,7 @@ Breakpoint uji wajib: 360, 390, 430, 768, 1024, 1440.
 | Poster video | Cloudinary | frame pertama diambil lewat `canvas` | `f_auto,q_auto,w_<size>` |
 | Video besar/panjang | YouTube unlisted | tempel URL manual | embed; tidak dipublikasi di channel |
 | Lagu tempelan | Spotify/YouTube | tempel URL | embed di kartu lagu |
+| Playlist | Spotify | tempel URL di admin room | embed dibentuk server dari ID playlist |
 
 ### 8.1 Aturan
 
@@ -313,11 +373,12 @@ Breakpoint uji wajib: 360, 390, 430, 768, 1024, 1440.
 - Batas **500 MB per file** video, dicek di server sebelum presign. Video lebih besar diarahkan ke YouTube unlisted karena tidak ada kompresi.
 - Poster video diambil otomatis dari frame pertama di browser lalu diunggah ke Cloudinary (bukan R2) agar hemat bandwidth. Jika gagal, poster boleh kosong.
 - Salinan YouTube wajib **unlisted**, tidak pernah `public` dan tidak dipublikasikan ke channel.
-- Key R2 dibuat server: `events/{eventId}/{uuid}.{ext}` — mencegah path traversal.
+- Key R2 dibuat server: `chapters/{chapterId}/{uuid}.{ext}` — mencegah path traversal.
 - R2 butuh CORS: `AllowedOrigins: [domain app]`, `AllowedMethods: [PUT, GET]`, `AllowedHeaders: [*]`.
 - Tanpa domain kustom, bucket diakses lewat `https://pub-xxxx.r2.dev`.
 - **Media tidak pernah diproksikan lewat domain aplikasi.** Tidak ada `rewrite`, route handler, atau image optimizer yang menyajikan file upload dari origin sendiri. Cloudinary/R2 tetap origin terpisah.
 - Presign R2 dan signature Cloudinary mengunci `Content-Type` + ekstensi dari allowlist (jpg, png, webp, heic, mp4, mov). `.html`, `.svg`, dan `.js` ditolak.
+- Playlist Spotify hanya menerima `https://open.spotify.com/playlist/{22 karakter}`; parameter pelacak seperti `?si=` dibuang sebelum disimpan, dan embed dibentuk server dari ID.
 - Menghapus item **tidak** menghapus file di Cloudinary/R2. Pembersihan aset dilakukan manual dari dashboard provider.
 - Pengecualian: media yang terbukti disalahgunakan (spam/judol/phishing) **boleh dihapus manual** dari dashboard provider. Ini tidak melanggar aturan soft delete aplikasi karena tidak menyentuh baris database.
 - Semua guest melihat video setelah login app; tautan YouTube tidak meminta akun Google.
@@ -398,10 +459,10 @@ order by 1 desc;
 
 ### 10.7 Log perubahan data
 
-`audit_logs` mencatat setiap mutasi data: `create`, `update`, `soft_delete`, `restore` pada `event`, `room`, `item`, `invite`, `user`, dan `setting`.
+`audit_logs` mencatat setiap mutasi data: `create`, `update`, `soft_delete`, `restore` pada `chapter`, `room`, `item`, `playlist`, `invite`, `user`, dan `setting`.
 
 - Ditulis dalam transaksi yang sama dengan mutasi, lewat `lib/audit.ts` — satu pintu.
-- Menyimpan `before`/`after` sebagai JSON, plus `actor_id` dan `event_id`.
+- Menyimpan `before`/`after` sebagai JSON, plus `actor_id` dan `chapter_id`.
 - Append-only: tidak pernah `UPDATE`, tidak pernah `DELETE`.
 - `users.last_login_at` tidak dicatat agar log tidak penuh noise.
 - Ditampilkan di `/admin/history` sebagai tab "Perubahan" (M6).
@@ -413,7 +474,7 @@ order by 1 desc;
 | Risiko | Mitigasi |
 |---|---|
 | Guest membuka ruangan terlarang | Cek `min_role` di repository (server), bukan di komponen |
-| IDOR / akses lintas event | Semua query di-scope ke event + role di repository; ID entitas dari client tidak dipercaya |
+| IDOR / akses lintas chapter | Semua query di-scope ke chapter + role di repository; ID entitas dari client tidak dipercaya |
 | SQL injection | Drizzle memparameterisasi nilai; `sql.raw` dilarang; sort/filter hanya dari whitelist enum |
 | Upload tidak sah | Hanya `owner`/`editor`; cek role di route handler sebelum presign |
 | File kebesaran | Batas 500 MB per file video, dicek di server |
@@ -465,9 +526,9 @@ Rincian implementasi, aturan cookie, dan tabel verifikasi ada di **§18 Model Ke
 | M | Isi | Definisi selesai |
 |---|---|---|
 | M1 | Scaffold, Tailwind, layout B/C, ambient layer, Vitest, CI, header keamanan + robots/noindex | Halaman kosong responsif di 360 & 1440; `npm run build` dan `npm run test:run` hijau; header §18.4 + `Disallow: /` terpasang |
-| M2 | Drizzle schema + migrasi + seed + repository + unit test logika + `lib/audit.ts` | `npm run db:migrate` jalan; seed menghasilkan 1 event + 4 room; semua query filter `deleted_at` |
+| M2 | Drizzle schema + migrasi + seed + repository + unit test logika + `lib/audit.ts` | `npm run db:migrate` jalan; seed menghasilkan 1 chapter + 3 room (`touring`, `healing`, `music`) + 2 playlist; semua query filter `deleted_at` |
 | M3 | Auth (`lib/auth/`) + middleware + login/invite | Guest bisa masuk via invite; owner bisa masuk; cookie `__Host-` aktif; `/invite/CODE` tidak tercatat mentah di `visits` |
-| M4 | CRUD event/room/item + halaman user + kartu lagu | Konten tampil di user dan bisa diedit di admin; hapus = soft delete + audit |
+| M4 | CRUD chapter/room/item + castle map + room feed + room playlist + kartu lagu | Konten tampil di user dan bisa diedit di admin; room baru dari admin langsung punya halaman; hapus = soft delete + audit |
 | M5 | Upload Cloudinary + R2 + poster canvas | Foto HEIC dari iPhone tampil di Chrome Android |
 | M6 | Visits + dashboard history + statistik + tab perubahan | Aksi tercatat; data tidak bisa dihapus dari UI |
 | M7 | Gate toggle + notifikasi Telegram | Gate berubah; pesan masuk ke Telegram |
@@ -506,7 +567,7 @@ NEXT_PUBLIC_GA_ID=
 
 ## 15. Keputusan Final
 
-Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-041).**
+Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-044).**
 
 | Topik | Keputusan |
 |---|---|
@@ -516,7 +577,10 @@ Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Su
 | Upload | Hanya `owner`/`editor`; batas 500 MB per file video |
 | Video | Tanpa kompresi; R2 sumber utama, salinan YouTube unlisted manual |
 | Lagu | Satu lagu tempelan per postingan, kartu + embed |
-| Nama event | "Our Little Universe", slug `our-little-universe` |
+| Playlist | Kontainer Spotify per room `playlist`; hanya URL + judul + urutan; dikelola dari admin (D-042) |
+| Navigasi | `/` landing publik; `/[chapter]` castle map; `rooms.kind` = `feed` / `playlist` (D-043) |
+| Istilah | `event` → `chapter` di tabel, kolom, route, dan audit; label UI **Chapter** (D-044) |
+| Nama chapter | "Our Little Universe", slug `our-little-universe` |
 | Tanggal 17 Sep 2026 | Tidak ditampilkan di UI |
 | Hapus konten | `owner` + `editor`; soft delete untuk semua tabel |
 | Zona waktu | `Asia/Jakarta` |
@@ -595,7 +659,7 @@ Runner **Vitest** + Testing Library, environment `node` (komponen memakai docblo
 
 | Diuji | Tidak diuji |
 |---|---|
-| Zod schema (slug, caption, host lagu, kode invite) | Server Component Next (E2E) |
+| Zod schema (slug, caption, host lagu, URL playlist, kode invite) | Server Component Next (E2E) |
 | `hasMinRole`, validasi invite | Query repository & migrasi (Neon branch) |
 | dedupe `room_view` 60 detik, `session_hash`, `logout` | Upload Cloudinary/R2 (manual M5) |
 | URL builder Cloudinary, key R2, batas 500 MB | |
@@ -604,7 +668,7 @@ Runner **Vitest** + Testing Library, environment `node` (komponen memakai docblo
 | `lib/security/` — `assertSameOrigin`, validasi `?next=`, whitelist sort/filter, allowlist host URL | |
 | `normalizeVisitPath` — redaksi `/invite/[code]`, buang query/hash | |
 | `robots`/header `noindex` terbentuk dari satu sumber | |
-| komponen UI kecil dan `song-card` | |
+| komponen UI kecil, `song-card`, dan `playlist-card` | |
 
 - Threshold coverage: **80% baris & fungsi** untuk `lib/` dan `components/`; `app/` dikecualikan.
 - Fungsi yang diuji harus menerima `now` sebagai parameter dan dipisah dari I/O.
@@ -683,7 +747,7 @@ Semua komponen CI/CD di atas gratis: Actions tanpa batas menit untuk repo publik
 
 - Signature Cloudinary dibuat server, menyertakan `allowed_formats` (jpg, png, webp, heic, mp4, mov), `max_file_size`, dan folder tetap.
 - Tolak `image/svg+xml` dan HTML.
-- Key R2 dibuat server: `events/{eventId}/{uuid}.{ext}`; presign mengunci `Content-Type` dan berlaku maksimal 5 menit.
+- Key R2 dibuat server: `chapters/{chapterId}/{uuid}.{ext}`; presign mengunci `Content-Type` dan berlaku maksimal 5 menit.
 - Semua media berada di domain publik provider. Keamanan bergantung pada key berisi uuid, bukan pada URL rahasia.
 - Media **tidak** disajikan lewat domain aplikasi: loader mengarah langsung ke provider; tidak ada `rewrite`/route/optimizer untuk upload.
 - Cloudinary memakai strict transformations, signed upload, dan `overwrite: false`.
@@ -728,6 +792,7 @@ Semua komponen CI/CD di atas gratis: Actions tanpa batas menit untuk repo publik
 | Log invite | Kunjungi `/invite/ABC123`, lihat `visits` | Tersimpan `/invite/[redacted]` |
 | Open redirect varian | `?next=/\evil.com`, `%2F%2Fevil.com`, `https://evil.com` | Semua ditolak |
 | Upload berbahaya | Upload `.html` / `.svg` | Ditolak sebelum presign |
+| URL playlist | Tempel `https://open.spotify.com/playlist/<id>?si=abc` dan URL host lain | `?si=` dibuang; host lain ditolak |
 | Image proxy | `/_next/image?url=https://evil.test/x.jpg` | 400, host tidak diizinkan |
 | Build tanpa script | `npm ci --ignore-scripts && npm run build` | Hijau |
 | Dependency | `npm audit --omit=dev` | Tidak ada `high`/`critical` |
@@ -741,7 +806,7 @@ Prinsip: situs ini **tidak menghasilkan trafik organik** dan **tidak punya konte
 - `app/robots.ts` mengembalikan `Disallow: /` untuk semua user-agent.
 - Header `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex` di semua respons HTML, termasuk preview.
 - Tidak ada sitemap, RSS, halaman daftar publik, atau "share page".
-- Landing `/` memakai **copy statis**; DB hanya memberi status `gate_open`. Judul event, nama guardian, dan isi ruangan tidak pernah dirender di halaman publik.
+- Landing `/` memakai **copy statis**; DB hanya memberi status `gate_open`. Judul chapter, nama guardian, dan isi ruangan tidak pernah dirender di halaman publik.
 - Metadata dan OG image statis. Tidak ada `opengraph-image` yang membaca database — crawler sosial tidak boleh bisa menarik konten privat tanpa login.
 - `poweredByHeader: false`; tanpa domain kustom dan tanpa wildcard DNS.
 
@@ -750,7 +815,7 @@ Prinsip: situs ini **tidak menghasilkan trafik organik** dan **tidak punya konte
 - Guest read-only. Tidak ada komentar, guestbook, form kontak, atau upload dari guest.
 - `/invite/[code]` sebelum login hanya copy generik; validasi kode setelah sesi ada.
 - Caption dan deskripsi adalah teks biasa: tanpa markdown, HTML, atau auto-link.
-- Link keluar hanya `items.url` dan `song_url`, keduanya lewat allowlist. Label link tidak bisa diubah menjadi URL lain.
+- Link keluar hanya `items.url`, `song_url`, dan `playlists.url`, semuanya lewat allowlist. Label link tidak bisa diubah menjadi URL lain.
 - Server tidak pernah mengambil URL dari user (anti-SSRF). Thumbnail YouTube dibentuk dari ID, bukan dari URL mentah.
 
 #### c. Media tidak menjadi host phishing

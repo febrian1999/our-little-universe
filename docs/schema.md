@@ -3,7 +3,7 @@
 **Database:** Neon Postgres (free tier: 0,5 GB, autosuspend 5 menit)
 **ORM:** Drizzle ORM + drizzle-kit
 **Sumber kebenaran:** `lib/db/schema.ts` — dokumen ini adalah ringkasan dan penjelasan.
-**Update terakhir:** 2026-10-28
+**Update terakhir:** 2026-10-29
 
 Aturan utama: **tidak ada perubahan skema tanpa migrasi Drizzle.** `ALTER TABLE` manual di Neon console dilarang. **Tidak ada `DELETE`** — semua penghapusan adalah soft delete.
 
@@ -30,14 +30,15 @@ Aturan utama: **tidak ada perubahan skema tanpa migrasi Drizzle.** `ALTER TABLE`
 
 ```
 users ──1:N──▶ invites        (created_by)
-users ──1:N──▶ events         (created_by)
-events ──1:N──▶ rooms          (soft delete, bukan cascade)
+users ──1:N──▶ chapters       (created_by)
+chapters ──1:N──▶ rooms        (soft delete, bukan cascade)
 rooms  ──1:N──▶ items          (soft delete, bukan cascade)
+rooms  ──1:N──▶ playlists      (soft delete, bukan cascade)
 users  ──1:N──▶ visits         (nullable: guest terhapus, history tetap)
-events ──1:N──▶ visits         (nullable)
+chapters ──1:N──▶ visits        (nullable)
 rooms  ──1:N──▶ visits         (nullable)
 users  ──1:N──▶ audit_logs     (actor, nullable)
-events ──1:N──▶ audit_logs     (nullable)
+chapters ──1:N──▶ audit_logs   (nullable)
 settings                        (key-value, tanpa relasi)
 ```
 
@@ -52,11 +53,12 @@ Catatan: FK memakai `on delete set null` sebagai jaring pengaman level database.
 create type user_role      as enum ('owner','editor','guest');
 create type item_type      as enum ('photo','video','song','text');
 create type media_provider as enum ('cloudinary','r2','youtube','spotify','none');
+create type room_kind      as enum ('feed','playlist');
 create type visit_action   as enum (
   'gate_open','room_view','login','logout','connect','upload','invite_redeem','gate_toggle'
 );
 create type audit_action   as enum ('create','update','soft_delete','restore');
-create type audit_entity   as enum ('event','room','item','invite','user','setting');
+create type audit_entity   as enum ('chapter','room','item','playlist','invite','user','setting');
 
 -- ============ USERS ============
 create table users (
@@ -92,8 +94,8 @@ create table invites (
   deleted_by  uuid references users(id) on delete set null
 );
 
--- ============ EVENTS ============
-create table events (
+-- ============ CHAPTERS ============
+create table chapters (
   id             uuid primary key default gen_random_uuid(),
   slug           text not null,
   title          text not null,
@@ -115,12 +117,13 @@ create table events (
 -- ============ ROOMS ============
 create table rooms (
   id              uuid primary key default gen_random_uuid(),
-  event_id        uuid not null references events(id),
+  chapter_id      uuid not null references chapters(id),
   key             text not null,
   title           text not null,
   icon            text not null default '✨',
   description     text,
   cover_public_id text,
+  kind            room_kind not null default 'feed',
   sort_order      integer not null default 0,
   locked          boolean not null default false,
   min_role        user_role not null default 'guest',
@@ -158,6 +161,23 @@ create table items (
   deleted_by    uuid references users(id) on delete set null
 );
 
+-- ============ PLAYLISTS ============
+-- Kontainer playlist Spotify milik satu room bertipe 'playlist'.
+-- Tidak menyimpan feed; feed tetap di items room bertipe 'feed'.
+create table playlists (
+  id         uuid primary key default gen_random_uuid(),
+  room_id    uuid not null references rooms(id),
+  provider   media_provider not null default 'spotify',
+  url        text not null,          -- kanonik: https://open.spotify.com/playlist/{id}, tanpa ?si=
+  title      text not null,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references users(id) on delete set null,
+  deleted_at timestamptz,
+  deleted_by uuid references users(id) on delete set null
+);
+
 -- ============ VISITS (APPEND ONLY) ============
 -- Tidak pernah DELETE. Tidak pernah UPDATE isi.
 -- Satu-satunya UPDATE yang diizinkan: kolom `visible`.
@@ -166,7 +186,7 @@ create table visits (
   id           bigserial primary key,
   user_id      uuid references users(id) on delete set null,
   session_hash text,
-  event_id     uuid references events(id) on delete set null,
+  chapter_id   uuid references chapters(id) on delete set null,
   room_id      uuid references rooms(id) on delete set null,
   action       visit_action not null,
   path         text,   -- ternormalisasi: tanpa query/hash; /invite/{code} → /invite/[redacted]
@@ -196,7 +216,7 @@ create table audit_logs (
   action     audit_action not null,
   entity     audit_entity not null,
   entity_id  text not null,              -- uuid entitas, atau key untuk settings
-  event_id   uuid references events(id) on delete set null,
+  chapter_id uuid references chapters(id) on delete set null,
   before     jsonb,
   after      jsonb,
   created_at timestamptz not null default now()
@@ -207,8 +227,10 @@ create index visits_created_idx    on visits (created_at desc);
 create index visits_action_idx     on visits (action, created_at desc);
 create index visits_user_idx       on visits (user_id, created_at desc);
 create index visits_visible_idx    on visits (visible, created_at desc);
+create index visits_chapter_idx    on visits (chapter_id, created_at desc);
 create index items_room_order_idx  on items (room_id, sort_order);
-create index rooms_event_order_idx on rooms (event_id, sort_order);
+create index rooms_chapter_order_idx on rooms (chapter_id, sort_order);
+create index playlists_room_order_idx on playlists (room_id, sort_order);
 create index audit_logs_created_idx on audit_logs (created_at desc);
 create index audit_logs_entity_idx  on audit_logs (entity, entity_id, created_at desc);
 create index audit_logs_actor_idx   on audit_logs (actor_id, created_at desc);
@@ -220,9 +242,11 @@ create unique index users_firebase_uid_active_idx on users (firebase_uid)
   where deleted_at is null;
 create unique index invites_code_active_idx on invites (code)
   where deleted_at is null;
-create unique index events_slug_active_idx on events (slug)
+create unique index chapters_slug_active_idx on chapters (slug)
   where deleted_at is null;
-create unique index rooms_event_key_active_idx on rooms (event_id, key)
+create unique index rooms_chapter_key_active_idx on rooms (chapter_id, key)
+  where deleted_at is null;
+create unique index playlists_room_url_active_idx on playlists (room_id, url)
   where deleted_at is null;
 ```
 
@@ -231,6 +255,8 @@ create unique index rooms_event_key_active_idx on rooms (event_id, key)
 - `item_type` **tidak punya** `letter`. Semua tulisan memakai `text`.
 - `song` adalah item berdiri sendiri untuk room Music: lagu ada di `provider` + `url`.
 - Item bertipe lain boleh punya **satu lagu tempelan** di `song_provider`, `song_url`, `song_title`, `song_start_s`.
+- `room_kind` memisahkan dua bentuk room: `feed` menampilkan `items`, `playlist` menampilkan `playlists`. Tidak ada room yang menampilkan keduanya (D-042, D-043).
+- `audit_entity` memakai `chapter`, bukan `event` (D-044); `playlist` ikut dicatat (D-042).
 - `audit_logs` append-only, jadi **tidak** punya `updated_at`, `updated_by`, `deleted_at`, `deleted_by`. Ini pengecualian eksplisit dari aturan kolom audit (D-034).
 
 ---
@@ -249,6 +275,7 @@ export const itemType = pgEnum('item_type', ['photo', 'video', 'song', 'text']);
 export const mediaProvider = pgEnum('media_provider', [
   'cloudinary', 'r2', 'youtube', 'spotify', 'none',
 ]);
+export const roomKind = pgEnum('room_kind', ['feed', 'playlist']);
 export const visitAction = pgEnum('visit_action', [
   'gate_open', 'room_view', 'login', 'logout',
   'connect', 'upload', 'invite_redeem', 'gate_toggle',
@@ -257,7 +284,7 @@ export const auditAction = pgEnum('audit_action', [
   'create', 'update', 'soft_delete', 'restore',
 ]);
 export const auditEntity = pgEnum('audit_entity', [
-  'event', 'room', 'item', 'invite', 'user', 'setting',
+  'chapter', 'room', 'item', 'playlist', 'invite', 'user', 'setting',
 ]);
 
 // --- helper kolom audit -------------------------------------------------
@@ -304,8 +331,8 @@ export const invites = pgTable(
   ],
 );
 
-export const events = pgTable(
-  'events',
+export const chapters = pgTable(
+  'chapters',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     slug: text('slug').notNull(),
@@ -324,7 +351,7 @@ export const events = pgTable(
     ...auditable(),
   },
   (t) => [
-    uniqueIndex('events_slug_active_idx').on(t.slug).where(sql`deleted_at is null`),
+    uniqueIndex('chapters_slug_active_idx').on(t.slug).where(sql`deleted_at is null`),
   ],
 );
 
@@ -332,23 +359,24 @@ export const rooms = pgTable(
   'rooms',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    eventId: uuid('event_id')
+    chapterId: uuid('chapter_id')
       .notNull()
-      .references(() => events.id),
+      .references(() => chapters.id),
     key: text('key').notNull(),
     title: text('title').notNull(),
     icon: text('icon').notNull().default('✨'),
     description: text('description'),
     coverPublicId: text('cover_public_id'),
+    kind: roomKind('kind').notNull().default('feed'),
     sortOrder: integer('sort_order').notNull().default(0),
     locked: boolean('locked').notNull().default(false),
     minRole: userRole('min_role').notNull().default('guest'),
     ...auditable(),
   },
   (t) => [
-    index('rooms_event_order_idx').on(t.eventId, t.sortOrder),
-    uniqueIndex('rooms_event_key_active_idx')
-      .on(t.eventId, t.key)
+    index('rooms_chapter_order_idx').on(t.chapterId, t.sortOrder),
+    uniqueIndex('rooms_chapter_key_active_idx')
+      .on(t.chapterId, t.key)
       .where(sql`deleted_at is null`),
   ],
 );
@@ -381,13 +409,34 @@ export const items = pgTable(
   (t) => [index('items_room_order_idx').on(t.roomId, t.sortOrder)],
 );
 
+export const playlists = pgTable(
+  'playlists',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roomId: uuid('room_id')
+      .notNull()
+      .references(() => rooms.id),
+    provider: mediaProvider('provider').notNull().default('spotify'),
+    url: text('url').notNull(),
+    title: text('title').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    ...auditable(),
+  },
+  (t) => [
+    index('playlists_room_order_idx').on(t.roomId, t.sortOrder),
+    uniqueIndex('playlists_room_url_active_idx')
+      .on(t.roomId, t.url)
+      .where(sql`deleted_at is null`),
+  ],
+);
+
 export const visits = pgTable(
   'visits',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
     sessionHash: text('session_hash'),
-    eventId: uuid('event_id').references(() => events.id, { onDelete: 'set null' }),
+    chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'set null' }),
     roomId: uuid('room_id').references(() => rooms.id, { onDelete: 'set null' }),
     action: visitAction('action').notNull(),
     path: text('path'),
@@ -399,6 +448,7 @@ export const visits = pgTable(
     index('visits_created_idx').on(t.createdAt),
     index('visits_action_idx').on(t.action, t.createdAt),
     index('visits_user_idx').on(t.userId, t.createdAt),
+    index('visits_chapter_idx').on(t.chapterId, t.createdAt),
   ],
 );
 
@@ -416,7 +466,7 @@ export const auditLogs = pgTable(
     action: auditAction('action').notNull(),
     entity: auditEntity('entity').notNull(),
     entityId: text('entity_id').notNull(),
-    eventId: uuid('event_id').references(() => events.id, { onDelete: 'set null' }),
+    chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'set null' }),
     before: jsonb('before'),
     after: jsonb('after'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -465,11 +515,11 @@ export const auditLogs = pgTable(
 | `code` | 8 karakter base32 tanpa `0/O`, `1/I`; unik di antara baris aktif |
 | `uses`, `max_uses` | Pembatas pemakaian |
 
-### `events`
+### `chapters`
 
 | Kolom | Keterangan |
 |---|---|
-| `slug` | Unik di antara baris aktif; lowercase + tanda hubung |
+| `slug` | Unik di antara baris aktif; lowercase + tanda hubung; dipakai sebagai `/[chapter]` (D-044) |
 | `theme` | `{ primary, accent }` — warna hex |
 | `gate_open` | Menentukan landing membuka gate atau tidak |
 | `visibility` | `private` (hanya owner/editor) atau `members` (semua login) |
@@ -479,7 +529,9 @@ export const auditLogs = pgTable(
 
 | Kolom | Keterangan |
 |---|---|
-| `key` | `home` / `touring` / `healing` / `music`; unik per event di antara baris aktif |
+| `chapter_id` | Chapter pemilik room; satu chapter punya banyak pintu |
+| `key` | `touring` / `healing` / `music`; unik per chapter di antara baris aktif; dinamis, bukan enum |
+| `kind` | `feed` menampilkan `items`; `playlist` menampilkan `playlists` (D-042) |
 | `locked` | Terkunci manual, tidak bergantung pada role |
 | `min_role` | Role minimum untuk membuka; semua room default `guest` |
 
@@ -501,6 +553,21 @@ export const auditLogs = pgTable(
 
 Untuk `type = 'song'`, lagu disimpan di `provider`/`url` dan `song_*` dibiarkan `none`. `song_*` hanya dipakai item non-lagu.
 
+### `playlists`
+
+| Kolom | Keterangan |
+|---|---|
+| `room_id` | Room bertipe `playlist`; playlist tidak bisa menempel ke room `feed` (divalidasi repository) |
+| `provider` | `spotify` untuk v1; nilai lain ditolak validasi |
+| `url` | Kanonik `https://open.spotify.com/playlist/{22 karakter}`; `?si=` dan parameter lain dibuang |
+| `title` | Label kartu, maks 200 karakter |
+| `sort_order` | Urutan tampil di dalam room |
+
+Aturan:
+- Satu URL aktif hanya boleh muncul sekali per room (unique parsial `(room_id, url)`).
+- Embed dibentuk server dari ID playlist yang sudah divalidasi; URL mentah tidak pernah masuk `iframe src`.
+- Playlist **tidak** punya feed. Postingan dengan lagu tempelan tetap di room `feed`.
+
 ### `visits`
 
 | Kolom | Keterangan |
@@ -514,7 +581,7 @@ Untuk `type = 'song'`, lagu disimpan di `provider`/`url` dan `song_*` dibiarkan 
 
 | Key | Bentuk value |
 |---|---|
-| `guardian` | `{ name, birthday, lastSeen }` — global, bukan per event |
+| `guardian` | `{ name, birthday, lastSeen }` — global, bukan per chapter |
 | `notifications` | `{ enabled, channel: 'telegram', chatIds: [] }` |
 
 Key `features` tidak dipakai. Izin upload ditentukan oleh role (`owner`/`editor`), bukan flag.
@@ -525,9 +592,9 @@ Key `features` tidak dipakai. Izin upload ditentukan oleh role (`owner`/`editor`
 |---|---|
 | `actor_id` | user yang melakukan perubahan; `null` untuk seed/backup/sistem |
 | `action` | `create` / `update` / `soft_delete` / `restore` |
-| `entity` | jenis entitas yang berubah |
+| `entity` | jenis entitas yang berubah (`chapter`, `room`, `item`, `playlist`, `invite`, `user`, `setting`) |
 | `entity_id` | uuid entitas, atau key untuk `settings` (kolom `text`) |
-| `event_id` | cakupan event untuk filter dashboard; `null` untuk perubahan level user/settings |
+| `chapter_id` | cakupan chapter untuk filter dashboard; `null` untuk perubahan level user/settings |
 | `before` | snapshot JSON kolom sebelum perubahan; `null` saat `create` |
 | `after` | snapshot JSON sesudah perubahan; `null` saat `soft_delete` |
 | `created_at` | waktu kejadian |
@@ -546,18 +613,19 @@ Semua query baca **wajib** menambahkan `deleted_at is null` pada tabel yang puny
 
 | # | Kebutuhan | Query |
 |---|---|---|
-| 1 | Event by slug | `select * from events where slug = $1 and deleted_at is null` |
-| 2 | Room satu event, berurutan | `select * from rooms where event_id = $1 and deleted_at is null order by sort_order` |
+| 1 | Chapter by slug | `select * from chapters where slug = $1 and deleted_at is null` |
+| 2 | Room satu chapter, berurutan | `select * from rooms where chapter_id = $1 and deleted_at is null order by sort_order` |
 | 3 | Item satu room, paginasi 24 | `select * from items where room_id = $1 and deleted_at is null order by sort_order limit 24 offset $2` |
 | 4 | Status guardian | `select value from settings where key = 'guardian'` |
-| 5 | Gate satu event | `select gate_open from events where slug = $1 and deleted_at is null` |
+| 5 | Gate satu chapter | `select gate_open from chapters where slug = $1 and deleted_at is null` |
 | 6 | 50 visit terakhir | `select * from visits where visible order by created_at desc limit 50` |
 | 7 | Statistik 30 hari | agregasi harian (lihat §7) |
 | 8 | User by firebase_uid | `select * from users where firebase_uid = $1 and deleted_at is null` |
 | 9 | Validasi invite | `select * from invites where code = $1 and deleted_at is null and active and (expires_at is null or expires_at > now()) and uses < max_uses` |
-| 10 | Event utama untuk gate landing | `select * from events where deleted_at is null order by sort_order, created_at limit 1` |
-| 11 | Log satu entitas | `select * from audit_logs where entity = $1 and entity_id = $2 order by created_at desc limit 50` |
-| 12 | Log terbaru untuk dashboard | `select * from audit_logs order by created_at desc limit 50` |
+| 10 | Chapter utama untuk gate landing | `select * from chapters where deleted_at is null order by sort_order, created_at limit 1` |
+| 11 | Playlist satu room, berurutan | `select * from playlists where room_id = $1 and deleted_at is null order by sort_order` |
+| 12 | Log satu entitas | `select * from audit_logs where entity = $1 and entity_id = $2 order by created_at desc limit 50` |
+| 13 | Log terbaru untuk dashboard | `select * from audit_logs order by created_at desc limit 50` |
 
 ---
 
@@ -611,9 +679,15 @@ update items
  where id = $1 and deleted_at is null
 returning *;
 
-insert into audit_logs (actor_id, action, entity, entity_id, event_id, before, after)
+insert into audit_logs (actor_id, action, entity, entity_id, chapter_id, before, after)
 values ($2, 'soft_delete', 'item', $1, $3, $4::jsonb, null);
 commit;
+
+-- Playlist room bertipe playlist, urut
+select id, title, url, sort_order
+from playlists
+where room_id = $1 and deleted_at is null
+order by sort_order, created_at;
 
 -- Log terbaru
 select l.created_at, l.action, l.entity, l.entity_id, u.display_name
@@ -639,6 +713,9 @@ limit 50;
 | Slug | Regex `^[a-z0-9]+(?:-[a-z0-9]+)*$`, unik di antara baris aktif |
 | Caption | Maks 500 karakter; validasi dengan Zod |
 | Lagu tempelan | Maks satu per item; `song_url` wajib host `open.spotify.com` atau `youtube.com`/`youtu.be` |
+| Item per kind | `items` hanya boleh masuk room `kind = 'feed'`; room `kind = 'playlist'` hanya menyimpan `playlists` |
+| Playlist | Hanya di room `kind = 'playlist'`; URL wajib `https://open.spotify.com/playlist/{22}` dan disimpan kanonik tanpa `?si=` |
+| Judul playlist | Maks 200 karakter; teks biasa, tanpa HTML/markdown |
 | Upload | Hanya `owner`/`editor`; maks 500 MB per file video, dicek di server |
 | File media saat item dihapus | **Tidak** dihapus dari Cloudinary/R2 (keputusan D-018) |
 | Media disalahgunakan | Boleh dihapus manual dari dashboard provider; bukan hard delete baris database |
@@ -680,14 +757,17 @@ Aturan:
 `scripts/seed.ts` membuat:
 
 ```
-1 event   : our-little-universe
-4 rooms   : home, touring, healing, music
-8 items   : 2 per room (1 teks + 1 foto placeholder)
+1 chapter : our-little-universe
+3 rooms   : touring, healing (kind feed), music (kind playlist)
+6 items   : 2 per room feed (1 teks + 1 foto placeholder)
+2 playlist: 2 URL Spotify contoh di room music
 2 users   : owner (firdausfebrian666@gmail.com), guest (demo@example.com)
 1 invite  : DEMO2026 (role guest, maxUses 5)
 settings  : guardian, notifications
 audit_logs: kosong (seed tidak menulis audit; actor_id null untuk operasi sistem)
 ```
+
+Room `home` tidak dibuat: `/` adalah landing page, dan `/our-little-universe` adalah castle map (D-043).
 
 Seed harus **idempoten**. Karena unique index bersifat partial, `on conflict` wajib menyertakan predikatnya:
 
@@ -705,7 +785,8 @@ on conflict (email) where deleted_at is null do nothing;
 |---|---|---|
 | `visits` | **selamanya** | Tidak dihapus; di-dump harian ke R2 |
 | `audit_logs` | **selamanya** | Tidak dihapus; di-dump harian ke R2 |
-| `items`, `rooms`, `events` | aktif + terhapus | Dump harian ke R2, **termasuk baris soft-deleted** |
+| `items`, `rooms`, `chapters` | aktif + terhapus | Dump harian ke R2, **termasuk baris soft-deleted** |
+| `playlists` | aktif + terhapus | Dump harian ke R2, **termasuk baris soft-deleted** |
 | Dump di R2 | 90 hari | Lifecycle rule di bucket |
 | User | aktif + terhapus | Dump harian |
 
