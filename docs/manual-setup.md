@@ -93,8 +93,8 @@ Tidak ada setelan native GitHub untuk ini, jadi dijaga secara proses (D-047). Bi
 
 **Settings → Environments → New environment**
 
-- [ ] Nama `production`
-- [ ] Required reviewers: akun Anda
+- [x] Nama `production`
+- [x] Required reviewers: akun Anda
 - [ ] Deployment branches: hanya `main`
 
 Dipakai workflow `migrate.yml` dan `backup.yml` agar migrasi tidak jalan tanpa persetujuan.
