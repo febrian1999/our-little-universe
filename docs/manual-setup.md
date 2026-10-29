@@ -35,10 +35,10 @@ Langkah 5 harus setelah langkah 4. GitHub menolak `required_status_checks` bila 
 
 Sudah ter-merge, aman dihapus:
 
-- [ ] `docs/anti-penyalahgunaan`
-- [ ] `docs/framework-readonly`
-- [ ] `docs/chapter-playlist-map`
-- [ ] `docs/next16-conventions`
+- [x] `docs/anti-penyalahgunaan`
+- [x] `docs/framework-readonly`
+- [x] `docs/chapter-playlist-map`
+- [x] `docs/next16-conventions`
 
 Lewat **Branches** → ikon tempat sampah, atau:
 
