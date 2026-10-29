@@ -125,6 +125,19 @@ export async function requireRole(min: UserRole): Promise<SessionUser>;
 
 Selama tiga fungsi itu tersedia, implementasi di baliknya boleh diganti (mis. ke Better Auth dengan session di Postgres) tanpa mengubah route atau komponen. Perubahan seperti ini **tidak** memerlukan revisi PRD.
 
+### 3.2 Catatan tentang Next.js 16.4.3
+
+Versi ini berbeda dari Next.js yang umum ada di materi lama. Aturan implementasi:
+
+- **Middleware bernama Proxy.** File `proxy.ts` di root, fungsi `proxy(request)`. Tidak ada `middleware.ts`.
+- **Cache Components aktif** (`cacheComponents: true`, `partialPrefetching: true`). Tidak ada `export const dynamic`; data dinamis dibungkus `<Suspense>`.
+- **`params` tetap Promise.** Tipe props memakai helper global `PageProps<'/[chapter]'>` dan `LayoutProps<'/'>`.
+- **Tidak ada `runtime` export**; Cache Components hanya berjalan di Node runtime.
+- **Tailwind lewat** `@tailwindcss/turbopack` di `turbopack.rules`, tanpa `postcss.config`.
+- Sebelum memakai API yang belum dikenal, baca dokumentasi versi terpasang di `node_modules/next/dist/docs/`.
+
+Rincian ada di `docs/agent-rules.md` §8 dan D-045.
+
 ---
 
 ## 4. Role & Hak Akses
@@ -146,7 +159,7 @@ Aturan akses halaman:
 | `/[chapter]/[roomKey]` | login + `role >= room.min_role` |
 | `/admin/**` | `owner` atau `editor` |
 
-Semua pengecekan role dilakukan **di server** (middleware + repository), tidak pernah hanya di client.
+Semua pengecekan role dilakukan **di server** (`proxy.ts` untuk redirect + repository), tidak pernah hanya di client.
 
 Semua room — termasuk `healing` — memakai `min_role = guest`. Pembatasan tulis murni berbasis role: hanya `owner` dan `editor`.
 
@@ -528,7 +541,7 @@ Rincian implementasi, aturan cookie, dan tabel verifikasi ada di **§18 Model Ke
 |---|---|---|
 | M1 | Scaffold, Tailwind, layout B/C, ambient layer, Vitest, CI, header keamanan + robots/noindex | Halaman kosong responsif di 360 & 1440; `npm run build` dan `npm run test:run` hijau; header §18.4 + `Disallow: /` terpasang |
 | M2 | Drizzle schema + migrasi + seed + repository + unit test logika + `lib/audit.ts` | `npm run db:migrate` jalan; seed menghasilkan 1 chapter + 3 room (`touring`, `healing`, `music`) + 2 playlist; semua query filter `deleted_at` |
-| M3 | Auth (`lib/auth/`) + middleware + login/invite | Guest bisa masuk via invite; owner bisa masuk; cookie `__Host-` aktif; `/invite/CODE` tidak tercatat mentah di `visits` |
+| M3 | Auth (`lib/auth/`) + `proxy.ts` + login/invite | Guest bisa masuk via invite; owner bisa masuk; cookie `__Host-` aktif; `/invite/CODE` tidak tercatat mentah di `visits` |
 | M4 | CRUD chapter/room/item + castle map + room feed + room playlist + kartu lagu | Konten tampil di user dan bisa diedit di admin; room baru dari admin langsung punya halaman; hapus = soft delete + audit |
 | M5 | Upload Cloudinary + R2 + poster canvas | Foto HEIC dari iPhone tampil di Chrome Android |
 | M6 | Visits + dashboard history + statistik + tab perubahan | Aksi tercatat; data tidak bisa dihapus dari UI |
@@ -568,7 +581,7 @@ NEXT_PUBLIC_GA_ID=
 
 ## 15. Keputusan Final
 
-Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-044).**
+Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-046).**
 
 | Topik | Keputusan |
 |---|---|
@@ -585,7 +598,10 @@ Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Su
 | Tanggal 17 Sep 2026 | Tidak ditampilkan di UI |
 | Hapus konten | `owner` + `editor`; soft delete untuk semua tabel |
 | Zona waktu | `Asia/Jakarta` |
-| Repo & proteksi | Publik; tidak ada push langsung ke `main`; wajib PR + CI hijau |
+| Repo & proteksi | Publik; tidak ada push langsung ke `development` maupun `main`; wajib PR + CI hijau |
+| Branch | `development` = integrasi harian; `main` = produksi/CI-CD, hanya dari PR rilis (D-046) |
+| Next.js 16 | `proxy.ts`, Cache Components, data dinamis di `<Suspense>`; tanpa `force-dynamic` (D-045) |
+| Dependency | Versi stabil terbaru saat instalasi, dikunci persis; upgrade lewat PR (D-045) |
 | Testing | Vitest, coverage `lib/` ≥ 80%, wajib hijau di CI |
 | Audit log | Setiap mutasi data dicatat di `audit_logs` (append-only, `before`/`after`) |
 | Keamanan | Header wajib, cookie `__Host-`, cek Origin, tanpa seed produksi, CSP bertahap |
@@ -615,22 +631,30 @@ Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Su
 ### 17.1 Model branch
 
 ```
-main                 ← produksi; hanya menerima merge dari PR
-feat/<ringkas>       fix/<ringkas>      chore/<ringkas>      db/<ringkas>
+main                 ← produksi / CI-CD; hanya menerima PR rilis dari development
+development          ← integrasi; semua pekerjaan harian masuk ke sini
+feat/<ringkas>  fix/<ringkas>  chore/<ringkas>  db/<ringkas>  docs/<ringkas>
+                     dibuat dari development
 ```
 
-**Dilarang push langsung ke `main`**, termasuk oleh owner. Alur wajib: buat branch → commit → push branch → PR → CI hijau → squash merge → branch dihapus.
+**Dilarang push langsung ke `development` maupun `main`**, termasuk oleh owner.
 
-### 17.2 Ruleset `main`
+Alur harian: buat branch dari `development` → commit → push branch → PR ke `development` → CI hijau → squash merge → branch dihapus.
+
+Alur rilis: PR `development` → `main` → CI hijau → merge. Merge ke `main` adalah satu-satunya pemicu deploy produksi.
+
+### 17.2 Ruleset `main` dan `development`
 
 Diterapkan sebagai GitHub Ruleset (`bypass_actors` kosong, tidak ada pengecualian):
 
 | Aturan | Efek |
 |---|---|
-| `deletion` | branch `main` tidak bisa dihapus |
+| `deletion` | branch tidak bisa dihapus (`main`, `development`) |
 | `non_fast_forward` | force-push ditolak |
 | `pull_request` | wajib PR; 0 approval karena dikerjakan sendiri; thread wajib selesai |
-| `required_status_checks` | job `verify` wajib hijau, `strict` (harus rebase ke `main` terbaru) |
+| `required_status_checks` | job `verify` wajib hijau, `strict` |
+
+Tambahan untuk `main`: PR hanya boleh berasal dari `development` (PR rilis), sehingga tidak ada perubahan yang masuk produksi tanpa melewati integrasi.
 
 Repo bersifat **publik** agar ruleset dan Actions gratis tanpa batas menit.
 
@@ -638,13 +662,14 @@ Repo bersifat **publik** agar ruleset dan Actions gratis tanpa batas menit.
 
 | File | Pemicu | Isi |
 |---|---|---|
-| `.github/workflows/ci.yml` | push `main` + PR | `npm ci` → cek migrasi ter-commit → typecheck → lint → test → build |
+| `.github/workflows/ci.yml` | push `development` + `main` + PR | `npm ci` → cek migrasi ter-commit → typecheck → lint → test → build |
 | `.github/workflows/migrate.yml` | manual + input `MIGRATE` | `db:migrate` ke Neon |
 | `.github/workflows/backup.yml` | cron 18.00 UTC (01.00 WIB) | dump DB ke R2 |
 
 Aturan CI:
 - `npx drizzle-kit generate` dilanjutkan `git diff --exit-code drizzle/` — PR gagal jika skema berubah tanpa migrasi.
-- **Build tidak boleh menyentuh database.** Halaman yang membaca gate wajib `dynamic`; nilai `NEXT_PUBLIC_*` diisi dummy saat CI.
+- **Build tidak boleh menyentuh database.** Cache Components membolehkan shell statis tanpa query: data gate/DB dibungkus `<Suspense>` dan berjalan saat request, bukan saat build. Jangan memakai `use cache` untuk data privat. `NEXT_PUBLIC_*` diisi dummy saat CI.
+- Tidak ada `export const dynamic` di kode; konfigurasi route mengikuti Cache Components (D-045).
 - Migrasi **tidak** dijalankan otomatis saat merge; SQL hasil generate wajib dibaca lebih dulu.
 - `npm audit --omit=dev --audit-level=high` — PR gagal jika ada kerentanan `high`.
 - Pemindaian pola secret: gagal jika `NEXT_PUBLIC_*.{SECRET,TOKEN,PRIVATE}` atau `BOT_TOKEN` muncul di kode client.
@@ -681,7 +706,9 @@ Integrasi Git Vercel, tanpa pipeline deploy sendiri:
 
 | Kejadian | Hasil |
 |---|---|
-| PR dibuka/diupdate | preview deployment, terlindungi Vercel Authentication |
+| PR ke `development` | preview deployment, terlindungi Vercel Authentication |
+| Merge ke `development` | preview deployment terbaru (bukan produksi) |
+| PR `development` → `main` | preview deployment + CI `verify` |
 | Merge ke `main` | production deployment |
 
 ### 17.6 Rahasia
@@ -736,7 +763,7 @@ Semua komponen CI/CD di atas gratis: Actions tanpa batas menit untuk repo publik
 ### 18.5 Otorisasi dan backdoor
 
 - `requireRole()` dipanggil di setiap Server Component/Action yang menulis, dan di route handler sebelum presign.
-- Middleware hanya untuk redirect; bukan satu-satunya pengecekan.
+- `proxy.ts` hanya untuk redirect; bukan satu-satunya pengecekan.
 - `OWNER_EMAIL` hanya mempromosikan user yang sudah terverifikasi provider (Google/email link), dan hanya saat login pertama.
 - Seed menolak jalan bila `NODE_ENV=production`; invite `DEMO2026` dan user demo hanya dibuat di dev.
 - Tidak ada endpoint debug, impersonasi, atau akun dengan kata sandi hardcode.
@@ -770,6 +797,7 @@ Semua komponen CI/CD di atas gratis: Actions tanpa batas menit untuk repo publik
 ### 18.9 Dependency
 
 - Versi dikunci persis; lockfile di-commit; CI memakai `npm ci`.
+- Versi mengikuti rilis stabil terbaru saat instalasi. Upgrade lewat PR tersendiri, dan dokumen menyesuaikan API terpasang — bukan sebaliknya, bukan downgrade untuk mempertahankan pola lama.
 - Install memakai `--ignore-scripts`; postinstall hanya untuk paket yang di-allowlist eksplisit.
 - Actions di-pin ke commit SHA, `permissions` minimal, tanpa `pull_request_target`.
 - `npm audit --omit=dev` di CI, gagal pada tingkat `high`.
