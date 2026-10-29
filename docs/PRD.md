@@ -555,7 +555,8 @@ Urutan wajib: **M1 → M2 → M3**. M4–M8 boleh paralel setelahnya.
 ## 14. Environment Variables
 
 ```
-DATABASE_URL=postgres://...                 # pooled
+DATABASE_URL=postgres://...                 # pooled, dipakai runtime app
+DATABASE_URL_UNPOOLED=postgres://...        # direct, dipakai drizzle-kit & script migrasi
 NEXT_PUBLIC_FIREBASE_API_KEY=
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=
@@ -577,11 +578,13 @@ NEXT_PUBLIC_GA_ID=
 
 `DATABASE_URL` di environment Preview Vercel wajib menunjuk Neon branch (D-038), bukan database produksi.
 
+`DATABASE_URL_UNPOOLED` hanya dipakai alat yang butuh koneksi langsung: `drizzle-kit generate/migrate`, `scripts/seed.ts`, `scripts/backup.ts`, dan workflow `migrate.yml`. Runtime aplikasi tidak memakainya. Pooler Neon (PgBouncer) bermasalah untuk DDL dan transaksi panjang, jadi migrasi lewat pooler dilarang.
+
 ---
 
 ## 15. Keputusan Final
 
-Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-046).**
+Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Sumber kebenaran lengkap: `docs/decisions.md` (D-001 – D-047).**
 
 | Topik | Keputusan |
 |---|---|
@@ -598,8 +601,8 @@ Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Su
 | Tanggal 17 Sep 2026 | Tidak ditampilkan di UI |
 | Hapus konten | `owner` + `editor`; soft delete untuk semua tabel |
 | Zona waktu | `Asia/Jakarta` |
-| Repo & proteksi | Publik; tidak ada push langsung ke `development` maupun `main`; wajib PR + CI hijau |
-| Branch | `development` = integrasi harian; `main` = produksi/CI-CD, hanya dari PR rilis (D-046) |
+| Repo & proteksi | Publik; tidak ada push langsung ke `main`; wajib PR + CI hijau |
+| Branch | `development` = branch kerja harian tanpa CI; `main` = produksi/CI-CD, hanya dari PR rilis (D-047) |
 | Next.js 16 | `proxy.ts`, Cache Components, data dinamis di `<Suspense>`; tanpa `force-dynamic` (D-045) |
 | Dependency | Versi stabil terbaru saat instalasi, dikunci persis; upgrade lewat PR (D-045) |
 | Testing | Vitest, coverage `lib/` ≥ 80%, wajib hijau di CI |
@@ -632,37 +635,39 @@ Diputuskan 2026-10-28, diperbarui 2026-10-29. Tidak ada pertanyaan terbuka. **Su
 
 ```
 main                 ← produksi / CI-CD; hanya menerima PR rilis dari development
-development          ← integrasi; semua pekerjaan harian masuk ke sini
+development          ← branch kerja harian; tanpa ruleset, tanpa CI
 feat/<ringkas>  fix/<ringkas>  chore/<ringkas>  db/<ringkas>  docs/<ringkas>
                      dibuat dari development
 ```
 
-**Dilarang push langsung ke `development` maupun `main`**, termasuk oleh owner.
+**Dilarang push langsung ke `main`.** `development` boleh di-push bebas sebagai backup pekerjaan.
 
-Alur harian: buat branch dari `development` → commit → push branch → PR ke `development` → CI hijau → squash merge → branch dihapus.
+Alur harian: buat branch dari `development` → kerja → jalankan `typecheck`, `lint`, `test:run` di lokal → squash merge ke `development` (boleh langsung, boleh lewat PR kecil) → push.
 
-Alur rilis: PR `development` → `main` → CI hijau → merge. Merge ke `main` adalah satu-satunya pemicu deploy produksi.
+Alur rilis: PR `development` → `main` → `verify` hijau → squash merge. Merge ke `main` adalah satu-satunya pemicu deploy produksi.
 
-### 17.2 Ruleset `main` dan `development`
+Karena `development` tidak melewati CI, verifikasi lokal di `docs/agent-rules.md` §6 (Definition of Done) bersifat wajib, bukan opsional.
+
+### 17.2 Ruleset `main`
 
 Diterapkan sebagai GitHub Ruleset (`bypass_actors` kosong, tidak ada pengecualian):
 
 | Aturan | Efek |
 |---|---|
-| `deletion` | branch tidak bisa dihapus (`main`, `development`) |
+| `deletion` | branch `main` tidak bisa dihapus |
 | `non_fast_forward` | force-push ditolak |
 | `pull_request` | wajib PR; 0 approval karena dikerjakan sendiri; thread wajib selesai |
 | `required_status_checks` | job `verify` wajib hijau, `strict` |
 
-Tambahan untuk `main`: PR hanya boleh berasal dari `development` (PR rilis), sehingga tidak ada perubahan yang masuk produksi tanpa melewati integrasi.
+`development` sengaja tidak diproteksi (D-047). Repo bersifat **publik** agar ruleset dan Actions gratis tanpa batas menit.
 
-Repo bersifat **publik** agar ruleset dan Actions gratis tanpa batas menit.
+GitHub tidak punya setelan native untuk membatasi branch sumber PR, jadi aturan "PR ke `main` hanya dari `development`" dijaga secara proses.
 
 ### 17.3 Workflow
 
 | File | Pemicu | Isi |
 |---|---|---|
-| `.github/workflows/ci.yml` | push `development` + `main` + PR | `npm ci` → cek migrasi ter-commit → typecheck → lint → test → build |
+| `.github/workflows/ci.yml` | PR ke `main` + push `main` | `npm ci` → cek migrasi ter-commit → typecheck → lint → test → build |
 | `.github/workflows/migrate.yml` | manual + input `MIGRATE` | `db:migrate` ke Neon |
 | `.github/workflows/backup.yml` | cron 18.00 UTC (01.00 WIB) | dump DB ke R2 |
 
@@ -670,6 +675,8 @@ Aturan CI:
 - `npx drizzle-kit generate` dilanjutkan `git diff --exit-code drizzle/` — PR gagal jika skema berubah tanpa migrasi.
 - **Build tidak boleh menyentuh database.** Cache Components membolehkan shell statis tanpa query: data gate/DB dibungkus `<Suspense>` dan berjalan saat request, bukan saat build. Jangan memakai `use cache` untuk data privat. `NEXT_PUBLIC_*` diisi dummy saat CI.
 - Tidak ada `export const dynamic` di kode; konfigurasi route mengikuti Cache Components (D-045).
+- Workflow `migrate.yml` dan `backup.yml` memakai environment `production` (reviewer wajib) dan koneksi langsung `DATABASE_URL_UNPOOLED`.
+- `development` tidak menjalankan workflow. Push ke `development` hanya memicu preview deployment Vercel.
 - Migrasi **tidak** dijalankan otomatis saat merge; SQL hasil generate wajib dibaca lebih dulu.
 - `npm audit --omit=dev --audit-level=high` — PR gagal jika ada kerentanan `high`.
 - Pemindaian pola secret: gagal jika `NEXT_PUBLIC_*.{SECRET,TOKEN,PRIVATE}` atau `BOT_TOKEN` muncul di kode client.
@@ -706,14 +713,15 @@ Integrasi Git Vercel, tanpa pipeline deploy sendiri:
 
 | Kejadian | Hasil |
 |---|---|
-| PR ke `development` | preview deployment, terlindungi Vercel Authentication |
-| Merge ke `development` | preview deployment terbaru (bukan produksi) |
+| Push ke `development` | preview deployment, terlindungi Vercel Authentication; tanpa CI |
 | PR `development` → `main` | preview deployment + CI `verify` |
 | Merge ke `main` | production deployment |
 
+Push ke `development` yang terlalu sering memakai kuota build Vercel. Jika mengganggu, aktifkan Ignored Build Step untuk branch itu.
+
 ### 17.6 Rahasia
 
-GitHub Actions: `DATABASE_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+GitHub Actions: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
 Vercel: seluruh variabel §14, dipisah Production dan Preview. Secret tidak pernah masuk `NEXT_PUBLIC_*`.
 `DATABASE_URL` di environment **Preview wajib menunjuk Neon branch**, bukan database produksi (D-038).
 

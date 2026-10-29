@@ -11,6 +11,8 @@ Urutan baca yang disarankan:
 5. `node_modules/next/dist/docs/` untuk API Next.js versi terpasang
 6. `lib/db/schema.ts`
 
+`docs/manual-setup.md` berisi langkah yang **hanya bisa dilakukan pemilik akun** (GitHub, Neon, Cloudinary, R2, Firebase, Vercel). Agent tidak boleh mengarang kredensial atau menganggap langkah itu sudah selesai.
+
 ---
 
 ## 1. Prinsip
@@ -87,7 +89,7 @@ scripts/
   seed.ts  backup.ts
 .github/
   workflows/ci.yml  migrate.yml  backup.yml
-  rulesets/main.json  development.json
+  rulesets/main.json
 tests/
   setup.ts
 vitest.config.ts
@@ -276,6 +278,8 @@ Jangan menampilkan pesan error mentah dari database ke UI.
 
 Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
 
+> Karena `development` tidak melewati CI (D-047), poin verifikasi di bawah adalah satu-satunya gerbang sebelum push. Jangan menyerahkan pekerjaan yang belum lolos.
+
 - [ ] `npm run typecheck` hijau
 - [ ] `npm run lint` hijau
 - [ ] `npm run test:run` hijau
@@ -330,6 +334,8 @@ npm run db:seed        # tsx scripts/seed.ts
 ```
 
 Semua perintah ini harus ada di `package.json` sejak M1. `next lint` sudah tidak ada; script `lint` memanggil `eslint` langsung. `next dev` dan `next build` memakai Turbopack secara default.
+
+Perintah `db:*` dan `scripts/backup.ts` memakai `DATABASE_URL_UNPOOLED` (koneksi langsung Neon). Runtime aplikasi memakai `DATABASE_URL` (pooled). Jangan menjalankan migrasi lewat pooler.
 
 ---
 
@@ -466,24 +472,28 @@ Sebelum menebak API framework, baca `AGENTS.md` di root dan dokumentasi versi te
 
 ```
 main            ← produksi / CI-CD; hanya PR rilis dari development
-development     ← integrasi; semua pekerjaan harian masuk ke sini
+development     ← branch kerja harian; tanpa ruleset, tanpa CI
 feat/<ringkas>  fix/<ringkas>  chore/<ringkas>  db/<ringkas>  docs/<ringkas>
                   dibuat dari development
 ```
 
-Alur wajib:
+Alur harian:
 
 ```bash
 git switch development
 git switch -c feat/nama-ringkas
 # ...kerja...
+npm run typecheck && npm run lint && npm run test:run
 git add -A && git commit -m "feat(scope): ringkasan"
-git push -u origin feat/nama-ringkas
-# buat PR ke development
-# tunggu job `verify` hijau, lalu squash merge
+git switch development
+git merge --squash feat/nama-ringkas
+git push origin development
+git branch -d feat/nama-ringkas
 ```
 
-Rilis: PR `development` → `main` setelah `verify` hijau. Merge ke `main` adalah satu-satunya pemicu deploy produksi. Jangan push langsung ke `development` atau `main`.
+Alur rilis: PR `development` → `main`; CI `verify` berjalan di PR dan wajib hijau. Merge ke `main` adalah satu-satunya pemicu deploy produksi. Jangan push langsung ke `main`; `development` boleh di-push bebas.
+
+Karena CI tidak berjalan di `development`, kegagalan yang lolos baru terlihat saat PR rilis. Selalu jalankan tiga perintah verifikasi di atas sebelum commit.
 
 ### Format commit
 

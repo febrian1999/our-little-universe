@@ -56,6 +56,7 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 | D-044 | 2026-10-29 | Istilah `event` menjadi `chapter` | Rename penuh: tabel `chapters`, kolom `chapter_id`, `audit_entity 'chapter'`, route `/[chapter]` dan `/admin/chapters`, repository `chapters.ts`. Label UI **Chapter** | "Chapter" lebih menjelaskan momen dalam cerita dan dipilih sebelum ada kode, sehingga rename masih murah | Kolom `slug` tetap nama teknis; `getChapterBySlug()`; semua dokumen dan migrasi awal memakai `chapter` |
 | D-045 | 2026-10-29 | Konvensi Next.js 16.4.3 | Ikuti API versi terpasang: `proxy.ts` (bukan `middleware.ts`), `cacheComponents` + `partialPrefetching`, data dinamis di `<Suspense>` tanpa `export const dynamic`, typed props `PageProps`/`LayoutProps`, Tailwind lewat `@tailwindcss/turbopack`. Dependency memakai versi stabil terbaru saat instalasi dan dikunci persis | Next 16 mengganti nama middleware dan model caching; memaksa pola lama berisiko error atau mematikan fitur | Rujukan `node_modules/next/dist/docs/`; `next.config.ts` menyimpan kedua flag; dokumen memakai `proxy.ts`; loader turbopack menggantikan `@tailwindcss/postcss` pada D-027; upgrade lewat PR |
 | D-046 | 2026-10-29 | Model branch | `development` = integrasi harian (PR + `verify` wajib); `main` = produksi/CI-CD dan hanya menerima PR rilis dari `development`. Branch kerja `feat/ fix/ chore/ db/ docs/` dibuat dari `development` | Memisahkan pekerjaan dari rilis agar `main` selalu siap deploy | Push langsung ke `development` dan `main` dilarang; deploy produksi hanya dari `main` |
+| D-047 | 2026-10-29 | Revisi model branch | `development` menjadi branch kerja harian tanpa ruleset dan tanpa CI; yang diproteksi hanya `main` (PR wajib + `verify`). CI hanya berjalan pada PR ke `main` dan push ke `main` | Dikerjakan satu orang; menunggu CI di setiap perubahan memperlambat iterasi, sementara `main` tetap satu-satunya jalur deploy sehingga cukup dijaga di sana | Menggantikan bagian D-046 tentang proteksi `development`; ruleset `development` dibatalkan; DoD mewajibkan `typecheck` + `lint` + `test:run` lokal sebelum push; `main` tetap menolak push langsung |
 
 ---
 
@@ -70,5 +71,5 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 ## Catatan
 
 - Keputusan stack (Next.js 16.4.3, Drizzle, Neon, Firebase Auth, Cloudinary, R2, Vercel, Serwist) ada di `docs/PRD.md` §3 dan sudah mengikat.
-- D-001 s.d. D-046 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
+- D-001 s.d. D-047 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
 - Entri D-001 – D-041 ditulis sebelum rename D-044. Setiap kata "event" pada baris lama dibaca sebagai **chapter** (`events` → `chapters`, `event_id` → `chapter_id`, `events.starts_at` → `chapters.starts_at`). Keputusan isinya tidak berubah.
