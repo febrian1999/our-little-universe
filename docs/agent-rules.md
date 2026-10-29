@@ -27,18 +27,18 @@ Urutan baca yang disarankan:
 
 ```
 app/
-  (public)/page.tsx                  gate
+  (public)/page.tsx                  landing + gate
   (auth)/login/page.tsx
   (auth)/auth/action/page.tsx
   (auth)/invite/[code]/page.tsx
-  (app)/[eventSlug]/page.tsx
-  (app)/[eventSlug]/[roomKey]/page.tsx
-  (app)/[eventSlug]/connect/page.tsx
+  (app)/[chapter]/page.tsx           castle map / menu utama
+  (app)/[chapter]/[roomKey]/page.tsx  room feed atau room playlist
+  (app)/[chapter]/connect/page.tsx
   admin/layout.tsx
   admin/page.tsx
-  admin/events/page.tsx
-  admin/events/[id]/page.tsx
-  admin/events/[id]/rooms/[roomId]/page.tsx
+  admin/chapters/page.tsx
+  admin/chapters/[id]/page.tsx
+  admin/chapters/[id]/rooms/[roomId]/page.tsx
   admin/media/page.tsx
   admin/access/page.tsx
   admin/history/page.tsx
@@ -57,19 +57,23 @@ components/
   ambient-background.tsx
   guardian-status.tsx
   room-grid.tsx
+  playlist-card.tsx
+  playlist-player.tsx
   song-card.tsx
   song-picker.tsx
   video-poster-upload.tsx
   admin/kpi-card.tsx
   admin/timeline-table.tsx
   admin/item-form.tsx
+  admin/playlist-form.tsx
 lib/
   auth/index.ts  firebase.ts  session.ts  guard.ts
   db/index.ts  schema.ts
-  db/repositories/events.ts  rooms.ts  items.ts  visits.ts
-                   users.ts  invites.ts  settings.ts
-  media/cloudinary.ts  r2.ts  image-loader.ts
-  validation/event.schema.ts  room.schema.ts  item.schema.ts  invite.schema.ts
+  db/repositories/chapters.ts  rooms.ts  items.ts  playlists.ts
+                   visits.ts  users.ts  invites.ts  settings.ts
+  media/cloudinary.ts  r2.ts  image-loader.ts  spotify.ts
+  validation/chapter.schema.ts  room.schema.ts  item.schema.ts
+             playlist.schema.ts  invite.schema.ts
   visits.ts
   audit.ts
   security/origin.ts  headers.ts  urls.ts  paths.ts
@@ -89,6 +93,8 @@ middleware.ts
 ```
 
 File test berdampingan dengan sumbernya (`lib/visits.test.ts`), bukan di folder terpisah.
+
+Tidak ada folder route per room. Semua room memakai `[roomKey]`; halaman memilih tampilan dari `rooms.kind` (`feed` atau `playlist`). Menambah room cukup lewat admin, tanpa file baru (D-043).
 
 ### Aturan penempatan
 
@@ -122,7 +128,7 @@ Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
    // SALAH
    import { db } from '@/lib/db';
    // BENAR
-   import { getEventBySlug } from '@/lib/db/repositories/events';
+   import { getChapterBySlug } from '@/lib/db/repositories/chapters';
    ```
 6. Upload media tanpa verifikasi sesi di server.
 7. Memakai unsigned Cloudinary preset.
@@ -158,8 +164,8 @@ Berikut hal yang **tidak boleh** dilakukan, dalam urutan tingkat bahaya:
 |---|---|---|
 | Komponen | PascalCase | `RoomGrid.tsx` |
 | Hook | `use` + PascalCase | `useGuardian.ts` |
-| Fungsi repository | `verbNoun` | `getEventBySlug`, `listRoomItems`, `createItem`, `softDeleteItem` |
-| Server Action | `verbNounAction` | `createItemAction` |
+| Fungsi repository | `verbNoun` | `getChapterBySlug`, `listRooms`, `listRoomItems`, `listRoomPlaylists`, `createItem`, `softDeletePlaylist` |
+| Server Action | `verbNounAction` | `createItemAction`, `createPlaylistAction` |
 | Skema Zod | camelCase + `Schema` | `createItemSchema` |
 | Tabel/kolom DB | snake_case | `created_at` |
 | File di `app/` | kebab-case | `room-grid.tsx` (kalau perlu) |
@@ -245,6 +251,21 @@ Jangan menampilkan pesan error mentah dari database ke UI.
 - File library yang disalin ke repo lalu diubah dianggap pelanggaran yang sama.
 - Konfigurasi milik repo tetap boleh diubah; itu bukan bagian dari library.
 
+### 5.5 Menambah room atau playlist
+
+```
+1. room baru: tentukan key unik per chapter + kind ('feed' | 'playlist')
+2. key tidak boleh menabrak route tetap: 'connect' (music/touring/healing hanya contoh seed)
+3. playlist hanya untuk room kind = 'playlist'; room 'feed' tidak boleh punya playlist
+4. kanonikkan URL lewat lib/media/spotify.ts → simpan tanpa ?si=
+5. tulis audit_logs dengan entity 'playlist' dalam transaksi yang sama
+6. castle map harus langsung menampilkan pintu baru tanpa perubahan kode
+```
+
+- Tidak ada folder route per room; jangan membuat `app/(app)/[chapter]/music/`.
+- URL Spotify mentah tidak pernah masuk `iframe src`; embed dibentuk dari ID tervalidasi.
+- Menghapus room atau playlist = soft delete, bukan hapus baris.
+
 ---
 
 ## 6. Definisi Selesai (Definition of Done)
@@ -273,6 +294,9 @@ Sebuah tugas baru boleh dinyatakan selesai jika **semua** poin ini terpenuhi:
 - [ ] Tidak ada workflow `pull_request_target`; Actions dengan secret di-pin ke SHA
 - [ ] `git status` tidak menunjukkan perubahan di `node_modules/`, `.next/`, atau file library
 - [ ] Tidak ada `patch-package`, fork library, atau file library yang disalin ke repo
+- [ ] Tidak ada folder route per room; room baru muncul dari database
+- [ ] `rooms.kind` dihormati: room `playlist` tidak merender feed, room `feed` tidak merender playlist
+- [ ] URL playlist kanonik (`https://open.spotify.com/playlist/{22}`), tanpa `?si=`, dan embed dibentuk server
 - [ ] Jika skema berubah: migrasi ada, `docs/schema.md` diperbarui
 - [ ] Jika route baru: aturan akses sesuai PRD §4 dan ditegakkan di server
 - [ ] Tampilan diuji di 360 px dan 1440 px, tanpa scroll horizontal
@@ -330,8 +354,8 @@ await db.delete(items).where(eq(items.id, id));
 
 Turbopack adalah bundler default. `params` dan `searchParams` tetap **Promise**:
 ```ts
-export default async function Page({ params }: { params: Promise<{ eventSlug: string }> }) {
-  const { eventSlug } = await params;
+export default async function Page({ params }: { params: Promise<{ chapter: string }> }) {
+  const { chapter } = await params;
 }
 ```
 
@@ -364,7 +388,7 @@ export default async function Page({ params }: { params: Promise<{ eventSlug: st
 
 - Presigned PUT punya masa berlaku; jangan di-cache di client.
 - CORS bucket harus mengizinkan origin app, `PUT`, dan `GET`.
-- Key dibuat server: `events/{eventId}/{uuid}.{ext}`; ekstensi hanya dari allowlist media.
+- Key dibuat server: `chapters/{chapterId}/{uuid}.{ext}`; ekstensi hanya dari allowlist media.
 - Presign mengunci `Content-Type`. `.html`, `.svg`, dan `.js` ditolak.
 - Bucket backup terpisah dan privat; token per bucket.
 
@@ -397,10 +421,11 @@ export function assertSameOrigin(request: Request): void {
 - Cookie sesi: `__Host-olu_session`, `httpOnly`, `secure`, `sameSite=lax`, umur 5 hari, ditandatangani `SESSION_SECRET`.
 - `?next=` hanya path internal, divalidasi lewat `new URL(next, origin)` dan perbandingan `origin` (bukan awalan `//`).
 - URL lagu/media hanya `https` dengan host allowlist; embed dibentuk server.
+- URL playlist hanya `https://open.spotify.com/playlist/{22 karakter}`; parameter pelacak dibuang dan ID divalidasi sebelum membentuk embed.
 - Jangan mencatat token, cookie, atau secret ke log/audit.
 - Header keamanan dari `lib/security/headers.ts`; CSP report-only dulu, enforce di M8.
 - `app/robots.ts` + `X-Robots-Tag` noindex di semua respons. Situs ini tidak boleh muncul di pencarian.
-- Landing `/` hanya memakai status `gate_open`; copy, judul, dan metadata statis. Tidak ada data event/guardian di halaman publik.
+- Landing `/` hanya memakai status `gate_open`; copy, judul, dan metadata statis. Tidak ada data chapter/guardian di halaman publik.
 - Caption dan deskripsi adalah teks biasa. Tanpa markdown, HTML, atau auto-link.
 - Media selalu dari origin Cloudinary/R2; jangan pernah menyajikannya lewat domain aplikasi.
 - `safeNextPath()` memakai `new URL(next, origin)` dan membandingkan `origin`, bukan cek awalan string.

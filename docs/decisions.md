@@ -51,6 +51,9 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 | D-039 | 2026-10-28 | Postur anti-penyalahgunaan | `robots.txt` + `X-Robots-Tag` noindex di semua respons, landing statis, preview via Vercel Authentication, caption tanpa auto-link/HTML, media tidak diproksikan lewat domain aplikasi | Situs ini sasaran potensial spam judol/adware; nilai SEO dan jalur tulis harus dibuat nol | Rincian di PRD §18.11; preview butuh login Vercel; tidak ada OG dinamis |
 | D-040 | 2026-10-28 | Hardening akun & supply chain | 2FA/passkey di GitHub/Vercel/Cloudflare/Neon/Firebase, secret scanning + push protection, Actions pin SHA, `npm ci --ignore-scripts`, playbook insiden | Kredensial dan build script adalah jalur masuk yang tersisa | Rincian PRD §18.12; postinstall hanya untuk paket yang di-allowlist; secret yang pernah masuk git wajib dirotasi |
 | D-041 | 2026-10-29 | Framework & library read-only | `node_modules/**`, source framework/library, dan `.next/**` tidak diedit; error diperbaiki di call site atau lewat perubahan versi; `patch-package`/fork dilarang tanpa keputusan baru | Perubahan di library hilang saat install ulang dan menyembunyikan penyimpangan | Aturan di agent-rules §1, §3 #28, §5.4; patch/fork wajib persetujuan |
+| D-042 | 2026-10-29 | Playlist per room | Room bertipe playlist hanya berisi kontainer playlist Spotify; feed postingan tidak berada di room itu. Tabel `playlists` menyimpan `room_id`, `provider`, `url`, `title`, `sort_order`; tanpa cover, mood, atau artist corner | Playlist adalah kumpulan tautan, bukan konten yang perlu diparse; memisahkan feed dan playlist menjaga keduanya sederhana | Playlist dikelola dari admin room; URL wajib `https://open.spotify.com/playlist/{22}` dan di-kanonikkan tanpa `?si=`; embed dibentuk server dari ID |
+| D-043 | 2026-10-29 | Landing, castle map, dan jenis room | `/` adalah landing publik; `/[chapter]` adalah castle map/menu utama; `rooms.kind` bernilai `feed` atau `playlist`. Room seed `home` dihapus | Castle map menjadi navigasi utama, sehingga room bernama "Home" membuka halaman yang membingungkan | Pintu castle map dirender dari `rooms` (bukan hardcode); jumlah room mengikuti database; room baru otomatis punya halaman |
+| D-044 | 2026-10-29 | Istilah `event` menjadi `chapter` | Rename penuh: tabel `chapters`, kolom `chapter_id`, `audit_entity 'chapter'`, route `/[chapter]` dan `/admin/chapters`, repository `chapters.ts`. Label UI **Chapter** | "Chapter" lebih menjelaskan momen dalam cerita dan dipilih sebelum ada kode, sehingga rename masih murah | Kolom `slug` tetap nama teknis; `getChapterBySlug()`; semua dokumen dan migrasi awal memakai `chapter` |
 
 ---
 
@@ -65,4 +68,5 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 ## Catatan
 
 - Keputusan stack (Next.js 16.4.3, Drizzle, Neon, Firebase Auth, Cloudinary, R2, Vercel, Serwist) ada di `docs/PRD.md` §3 dan sudah mengikat.
-- D-001 s.d. D-041 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
+- D-001 s.d. D-044 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
+- Entri D-001 – D-041 ditulis sebelum rename D-044. Setiap kata "event" pada baris lama dibaca sebagai **chapter** (`events` → `chapters`, `event_id` → `chapter_id`, `events.starts_at` → `chapters.starts_at`). Keputusan isinya tidak berubah.
