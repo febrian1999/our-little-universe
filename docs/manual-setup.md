@@ -78,7 +78,7 @@ Branch rules:
   - Required approvals: **0**
   - [x] Require conversation resolution before merging
 - [x] **Require status checks to pass**
-  - [x] Add checks → `verify`
+  - [ ] Add checks → `verify`
   - [x] Require branches to be up to date before merging
 
 `development` **tidak** dibuatkan ruleset (D-047). Branch itu boleh di-push bebas sebagai backup pekerjaan.
