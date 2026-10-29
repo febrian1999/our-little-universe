@@ -1,6 +1,6 @@
 # PRD — Our Little Universe
 
-**Versi:** 2.7
+**Versi:** 2.8
 **Status:** Final — siap implementasi
 **Pemilik:** Ian
 **Update terakhir:** 2026-10-29
@@ -97,8 +97,9 @@ Keputusan di bawah ini mengikat. Perubahan harus dicatat di `docs/decisions.md`.
 | Layer | Keputusan | Alasan |
 |---|---|---|
 | Framework | Next.js 16.4.3 App Router | Versi stabil terbaru; Turbopack default |
+| Rendering | Cache Components + Partial Prefetching | Shell statis disajikan cepat, data dinamis streaming di `<Suspense>` |
 | Bahasa | TypeScript 5.9.3 `strict` | Tipe ketat; TS 7 ditunda sampai ekosistem siap |
-| Styling | Tailwind CSS 4.3.3 | Konfigurasi lewat `@theme` di CSS |
+| Styling | Tailwind CSS 4.3.3 | Konfigurasi lewat `@theme` di CSS; loader `@tailwindcss/turbopack` |
 | Database | Neon Postgres (free) | SQL, 0,5 GB, tanpa kartu kredit |
 | ORM | Drizzle ORM + drizzle-kit | SQL-first, migrasi versioned, tipe otomatis |
 | Auth | Firebase Auth (Google + email link) | Pilihan Ian; terisolasi di `lib/auth/` |
