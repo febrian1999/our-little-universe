@@ -55,9 +55,9 @@ Setelah itu bersihkan referensi lokal: `git fetch --prune`.
 
 **Settings → General → Pull Requests**
 
-- [ ] Centang **Allow squash merging**, jadikan satu-satunya metode
-- [ ] Matikan **Allow merge commits**
-- [ ] Matikan **Allow rebase merging**
+- [x] Centang **Allow squash merging**, jadikan satu-satunya metode
+- [x] Matikan **Allow merge commits**
+- [x] Matikan **Allow rebase merging**
 - [ ] Centang **Automatically delete head branches**
 - [ ] Centang **Always suggest updating pull request branches**
 
