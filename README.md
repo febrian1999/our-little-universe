@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Our Little Universe
 
-## Getting Started
+Ruang memori privat untuk pemilik dan tamu undangan. Next.js 16 App Router, Neon Postgres, Cloudinary, Cloudflare R2, Firebase Auth. Target biaya Rp 0.
 
-First, run the development server:
+Status: **pra-M1**. Scaffold Next.js 16.4.3 sudah ada; fitur aplikasi belum.
+
+## Dokumentasi
+
+| File | Isi |
+|---|---|
+| [`docs/PRD.md`](docs/PRD.md) | Spesifikasi produk, route, UI, milestone, CI/CD |
+| [`docs/schema.md`](docs/schema.md) | Skema database, DDL/Drizzle, seed, aturan migrasi |
+| [`docs/agent-rules.md`](docs/agent-rules.md) | Kontrak kerja untuk agent dan manusia |
+| [`docs/decisions.md`](docs/decisions.md) | Keputusan arsitektur D-001 – D-047 |
+| [`docs/manual-setup.md`](docs/manual-setup.md) | Langkah setup yang hanya bisa dilakukan pemilik akun |
+
+Baca `docs/agent-rules.md` sebelum menulis kode. API Next.js mengikuti dokumentasi versi terpasang di `node_modules/next/dist/docs/`, bukan materi dari ingatan.
+
+## Mulai
 
 ```bash
+npm ci
+cp .env.example .env.local   # isi sesuai docs/manual-setup.md §7
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Branch
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+main         ← produksi / CI-CD; hanya PR rilis dari development
+development  ← branch kerja harian; tanpa ruleset, tanpa CI
+```
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Jangan push langsung ke `main`. Rincian di `docs/PRD.md` §17 dan D-047.
