@@ -54,6 +54,7 @@ app/
   api/upload/r2/presign/route.ts
   api/notify/telegram/route.ts
 components/
+  auth/login-form.tsx
   ui/gift-card.tsx
   ui/badge.tsx
   ui/button.tsx
@@ -71,7 +72,7 @@ components/
   admin/item-form.tsx
   admin/playlist-form.tsx
 lib/
-  auth/index.ts  firebase.ts  session.ts  guard.ts
+  auth/index.ts  firebase.ts  firebase-admin.ts  session.ts  roles.ts
   db/index.ts  schema.ts
   db/repositories/chapters.ts  rooms.ts  items.ts  playlists.ts
                    visits.ts  users.ts  invites.ts  settings.ts
