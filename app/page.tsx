@@ -20,12 +20,30 @@ export default function LandingPage() {
         </p>
 
         <div className="mt-8">
-          <Suspense fallback={<ClosedGate />}>
+          <Suspense fallback={<SkeletonGate />}>
             <GateCTA />
           </Suspense>
         </div>
       </section>
     </main>
+  );
+}
+
+function SkeletonGate() {
+  return (
+    <>
+      <p className="flex items-center gap-2 text-sm text-neutral-600">
+        <span aria-hidden className="size-2 rounded-full bg-neutral-300" />
+        Memeriksa gerbang…
+      </p>
+      <button
+        type="button"
+        disabled
+        className="tap mt-4 flex w-full cursor-not-allowed items-center justify-center rounded-full bg-neutral-200 px-6 text-base font-semibold text-neutral-500"
+      >
+        Buka Gerbang
+      </button>
+    </>
   );
 }
 
