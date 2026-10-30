@@ -78,7 +78,7 @@ Branch rules:
   - Required approvals: **0**
   - [x] Require conversation resolution before merging
 - [x] **Require status checks to pass**
-  - [x] Add checks → `verify`
+  - [ ] Add checks → `verify`
   - [x] Require branches to be up to date before merging
 
 `development` **tidak** dibuatkan ruleset (D-047). Branch itu boleh di-push bebas sebagai backup pekerjaan.
@@ -122,9 +122,9 @@ Dipakai workflow `migrate.yml` dan `backup.yml` agar migrasi tidak jalan tanpa p
 
 ## 2. Neon (Postgres)
 
-- [ ] Daftar di neon.tech, region **Singapore**
+- [x] Daftar di neon.tech, region **Singapore**
 - [ ] Buat project, simpan password
-- [ ] Branch `main` untuk produksi
+- [x] Branch `main` untuk produksi
 - [ ] Branch `preview` untuk PR dan Vercel Preview (D-038)
 - [ ] Salin connection string **pooled** (host mengandung `-pooler`) → `DATABASE_URL`
 - [ ] Salin connection string **direct** → `DATABASE_URL_UNPOOLED`
@@ -135,7 +135,7 @@ Pooler Neon memakai PgBouncer dan tidak andal untuk DDL. Semua migrasi, seed, da
 
 ## 3. Cloudinary (foto)
 
-- [ ] Daftar akun gratis
+- [x] Daftar akun gratis
 - [ ] Catat **cloud name**
 - [ ] Buat **API key + secret** (Settings → API Keys)
 - [ ] Jangan membuat unsigned upload preset; semua upload harus signed dari server
@@ -161,8 +161,8 @@ Tidak ada penghapusan file dari aplikasi. Pembersihan hanya manual dari dashboar
 
 ## 5. Firebase (login owner)
 
-- [ ] Buat project Firebase
-- [ ] Authentication → Sign-in method → aktifkan **Email/Password** (dan Google bila perlu)
+- [x] Buat project Firebase
+- [x] Authentication → Sign-in method → aktifkan **Email/Password** (dan Google bila perlu)
 - [ ] Project settings → Your apps → Web app → salin config:
   - [ ] `NEXT_PUBLIC_FIREBASE_API_KEY`
   - [ ] `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
@@ -177,8 +177,8 @@ Tidak ada penghapusan file dari aplikasi. Pembersihan hanya manual dari dashboar
 
 ## 6. Vercel
 
-- [ ] Import repo `febrian1999/our-little-universe`
-- [ ] **Production Branch = `main`** (Settings → Git)
+- [x] Import repo `febrian1999/our-little-universe`
+- [x] **Production Branch = `main`** (Settings → Git)
 - [ ] Preview deployment untuk semua branch lain
 - [ ] Aktifkan **Vercel Authentication** untuk Preview; repo publik, preview tidak boleh terbuka
 - [ ] Environment variables per-scope:
