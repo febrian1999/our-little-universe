@@ -1,4 +1,4 @@
-// ponytail: gate masih statis sampai M2 menghubungkan settings.gate_open.
+// ponytail: gate masih statis sampai M4 menghubungkan chapters.gate_open.
 const gateOpen = false;
 
 export default function LandingPage() {
