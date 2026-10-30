@@ -2,7 +2,7 @@
 
 Ruang memori privat untuk pemilik dan tamu undangan. Next.js 16 App Router, Neon Postgres, Cloudinary, Cloudflare R2, Firebase Auth. Target biaya Rp 0.
 
-Status: **pra-M1**. Scaffold Next.js 16.4.3 sudah ada; fitur aplikasi belum.
+Status: **M1 selesai** — scaffold, token tema, landing gate, header keamanan, robots noindex, Vitest, dan CI. Belum ada database, auth, atau konten.
 
 ## Dokumentasi
 
