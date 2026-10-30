@@ -12,6 +12,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["lib/**"],
+      // Query repository & migrasi diuji manual di Neon branch (PRD §17.4).
+      exclude: ["lib/db/**"],
       reporter: ["text", "lcov"],
       thresholds: { lines: 80, functions: 80 },
     },

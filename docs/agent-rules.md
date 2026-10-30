@@ -86,13 +86,13 @@ docs/
   PRD.md  schema.md  agent-rules.md  decisions.md
 drizzle/
 scripts/
-  seed.ts  backup.ts
+  seed.mts  backup.ts
 .github/
   workflows/ci.yml  migrate.yml  backup.yml
   rulesets/main.json
 tests/
   setup.ts
-vitest.config.ts
+vitest.config.mts
 proxy.ts                           redirect ringan (bukan middleware.ts)
 AGENTS.md                          aturan agent dari next dev (di-commit)
 ```
@@ -246,7 +246,7 @@ Jangan menampilkan pesan error mentah dari database ke UI.
 ```
 1. baca pesan error + tipe + dokumentasi versi yang terpasang
 2. perbaiki cara memanggil API kita (tipe, argumen, await, params Promise)
-3. jika perlu, ubah konfigurasi milik repo (next.config.ts, tsconfig.json, vitest.config.ts)
+3. jika perlu, ubah konfigurasi milik repo (next.config.ts, tsconfig.json, vitest.config.mts)
 4. jika masih gagal, cek bug versi → naikkan/turunkan versi di package.json + catat di decisions.md
 5. jika API tidak cocok, buat adapter di lib/, jangan ubah library
 6. fork/patch hanya boleh lewat keputusan baru dan persetujuan Ian
