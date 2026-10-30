@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { getUserById } from "@/lib/db/repositories/users";
 import { hasMinRole, type UserRole } from "./roles";
 import { SESSION_COOKIE, verifySessionToken } from "./session";
@@ -19,6 +20,8 @@ export type SessionUser = {
  * User yang login tapi `is_allowed = false` diperlakukan sebagai tamu asing.
  */
 export async function getSession(): Promise<SessionUser | null> {
+  // Cache Components: token punya `Date.now()`, jadi harus setelah request.
+  await connection();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
 

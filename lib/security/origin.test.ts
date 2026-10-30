@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import { ForbiddenError, assertSameOrigin, isSameOrigin } from "./origin";
 
 function request(url: string, origin?: string) {
-  return new Request(url, {
-    method: "POST",
-    headers: origin ? { origin } : undefined,
-  });
+  const headers = new Headers({ host: new URL(url).host });
+  if (origin) headers.set("origin", origin);
+  return new Request(url, { method: "POST", headers });
 }
 
 describe("isSameOrigin", () => {
@@ -26,6 +25,18 @@ describe("isSameOrigin", () => {
     expect(isSameOrigin(request("https://olu.example/api", "bukan url"))).toBe(
       false,
     );
+  });
+
+  it("memakai x-forwarded-host saat berada di belakang proxy", () => {
+    const forwarded = new Request("http://internal.local/api", {
+      method: "POST",
+      headers: {
+        host: "internal.local",
+        "x-forwarded-host": "olu.example",
+        origin: "https://olu.example",
+      },
+    });
+    expect(isSameOrigin(forwarded)).toBe(true);
   });
 });
 
