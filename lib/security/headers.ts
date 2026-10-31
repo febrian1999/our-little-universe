@@ -13,7 +13,9 @@ export const securityHeaders: Header[] = [
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains; preload",
   },
-  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // Popup OAuth Firebase butuh opener tetap hidup; `same-origin` memutusnya
+  // sehingga signInWithPopup tidak pernah selesai (D-049).
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
   {
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",

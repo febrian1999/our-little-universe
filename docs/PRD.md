@@ -764,7 +764,7 @@ Semua komponen CI/CD di atas gratis: Actions tanpa batas menit untuk repo publik
 - URL dari user divalidasi: skema `https` saja, host harus `open.spotify.com`, `youtube.com`, `youtu.be`, atau domain Cloudinary/R2.
 - Embed dibentuk di server dari ID tervalidasi, bukan dari URL mentah.
 - `public_id` Cloudinary divalidasi regex sebelum membentuk URL transformasi.
-- Header wajib sejak M1: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy: same-origin`, `Permissions-Policy` minimal (kamera, mikrofon, lokasi mati), serta `X-Robots-Tag` noindex.
+- Header wajib sejak M1: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy: same-origin-allow-popups`, `Permissions-Policy` minimal (kamera, mikrofon, lokasi mati), serta `X-Robots-Tag` noindex.
 - Respons yang membawa sesi memakai `Cache-Control: no-store`.
 - CSP bertahap: `Content-Security-Policy-Report-Only` di M6, enforcement di M8 dengan nonce. Sumber yang diizinkan: self, Cloudinary, `pub-*.r2.dev`, `youtube.com`, `open.spotify.com`, GA4.
 

@@ -32,6 +32,12 @@ describe("securityHeaders", () => {
     expect(value("X-Content-Type-Options")).toBe("nosniff");
   });
 
+  it("mengizinkan popup OAuth tanpa membuka frame", () => {
+    const value = (key: string) =>
+      securityHeaders.find((h) => h.key === key)?.value ?? "";
+    expect(value("Cross-Origin-Opener-Policy")).toBe("same-origin-allow-popups");
+  });
+
   it("mematikan kamera, mikrofon, dan lokasi", () => {
     const policy =
       securityHeaders.find((h) => h.key === "Permissions-Policy")?.value ?? "";
