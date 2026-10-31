@@ -25,6 +25,15 @@ textarea {
   min-height: 44px;
 }
 
+.btn-primary {
+  min-height: 44px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 .ambient {
   position: fixed;
   inset: 0;

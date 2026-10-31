@@ -38,9 +38,9 @@ app/
   (app)/[chapter]/page.tsx           castle map / menu utama
   (app)/[chapter]/[roomKey]/page.tsx  room feed atau room playlist
   (app)/[chapter]/connect/page.tsx
-  admin/layout.tsx
-  admin/page.tsx
-  admin/chapters/page.tsx
+  admin/layout.tsx                   instant = false (blocking route)
+  admin/page.tsx                     daftar + form chapter
+  admin/actions.ts                   server actions CRUD + audit
   admin/chapters/[id]/page.tsx
   admin/chapters/[id]/rooms/[roomId]/page.tsx
   admin/media/page.tsx
@@ -69,14 +69,14 @@ components/
   video-poster-upload.tsx
   admin/kpi-card.tsx
   admin/timeline-table.tsx
-  admin/item-form.tsx
-  admin/playlist-form.tsx
+  admin/form.tsx                    field/notice/card bersama
+  admin/photo-upload.tsx            unggah foto bertanda tangan
 lib/
   auth/index.ts  firebase.ts  firebase-admin.ts  session.ts  roles.ts
   db/index.ts  schema.ts
   db/repositories/chapters.ts  rooms.ts  items.ts  playlists.ts
                    visits.ts  users.ts  invites.ts  settings.ts
-  media/cloudinary.ts  r2.ts  image-loader.ts  spotify.ts  youtube.ts
+  media/cloudinary.ts  photo-limits.ts  r2.ts  image-loader.ts  spotify.ts  youtube.ts
   validation/chapter.schema.ts  room.schema.ts  item.schema.ts
              playlist.schema.ts  invite.schema.ts
   visits.ts
