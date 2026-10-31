@@ -8,7 +8,7 @@ import { listRooms } from "@/lib/db/repositories/rooms";
 
 export default function ChapterPage(props: PageProps<"/[chapter]">) {
   return (
-    <main className="relative flex-1 px-6 py-12">
+    <main id="konten" className="relative flex-1 px-6 py-12">
       <div
         aria-hidden
         className="ambient bg-[radial-gradient(60%_50%_at_20%_10%,#fce7f3_0%,transparent_60%),radial-gradient(50%_45%_at_85%_85%,#dbeafe_0%,transparent_65%)]"

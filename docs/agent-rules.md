@@ -48,6 +48,8 @@ app/
   admin/settings/page.tsx            toggle gerbang (owner)
   actions.ts                         server action publik (gate_open)
   robots.ts                          disallow all
+  manifest.ts                        manifest PWA
+  apple-icon.png                     ikon iOS 180px
   api/auth/session/route.ts
   api/guardian/route.ts
   api/upload/sign/route.ts
@@ -60,6 +62,7 @@ components/
   ui/button.tsx
   ui/empty-state.tsx
   ambient-background.tsx
+  service-worker.tsx                 daftar /sw.js
   guardian-status.tsx
   room-grid.tsx
   lightbox.tsx
@@ -82,10 +85,13 @@ lib/
   visits.ts
   visit-stats.ts                    agregasi harian murni (Asia/Jakarta)
   audit.ts
-  security/origin.ts  headers.ts  urls.ts  paths.ts
+  security/origin.ts  headers.ts  csp.ts  urls.ts  paths.ts
   utils/cn.ts  format-date.ts
 docs/
   PRD.md  schema.md  agent-rules.md  decisions.md
+public/
+  sw.js                              service worker minimal (tanpa cache)
+  icons/icon-192.png  icon-512.png
 drizzle/
 scripts/
   seed.mts  backup.ts

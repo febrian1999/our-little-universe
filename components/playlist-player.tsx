@@ -35,7 +35,7 @@ export function PlaylistPlayer({ playlists }: { playlists: PlaylistItem[] }) {
                   <button
                     type="button"
                     onClick={() => setActive(isActive ? null : playlist.id)}
-                    className="tap rounded-full bg-primary px-4 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    className="tap rounded-full bg-accent px-4 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   >
                     {isActive ? "Tutup" : "Putar"}
                   </button>

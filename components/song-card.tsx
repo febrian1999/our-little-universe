@@ -25,7 +25,7 @@ export function SongCard({
           <button
             type="button"
             onClick={() => setPlaying((value) => !value)}
-            className="tap rounded-full bg-primary px-4 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="tap rounded-full bg-accent px-4 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             {playing ? "Tutup lagu" : "Putar lagu"}
           </button>
