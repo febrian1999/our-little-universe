@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { items, type itemType, type mediaProvider } from "@/lib/db/schema";
 
@@ -38,13 +38,20 @@ export async function listItems(
     .offset(offset);
 }
 
-export async function getItemById(id: string) {
-  const [row] = await getDb()
+export async function getItemById(id: string) {  const [row] = await getDb()
     .select()
     .from(items)
     .where(and(eq(items.id, id), isNull(items.deletedAt)))
     .limit(1);
   return row ?? null;
+}
+
+export async function countActiveItems() {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)::int` })
+    .from(items)
+    .where(isNull(items.deletedAt));
+  return row?.n ?? 0;
 }
 
 export async function createItem(

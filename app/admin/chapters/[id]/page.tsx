@@ -22,7 +22,7 @@ export default async function ChapterAdmin(
 
   return (
     <>
-      <Link href="/admin" className="text-sm text-accent underline">
+      <Link href="/admin/chapters" className="text-sm text-accent underline">
         ← Semua chapter
       </Link>
 

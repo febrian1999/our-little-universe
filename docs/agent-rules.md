@@ -39,13 +39,12 @@ app/
   (app)/[chapter]/[roomKey]/page.tsx  room feed atau room playlist
   (app)/[chapter]/connect/page.tsx
   admin/layout.tsx                   instant = false (blocking route)
-  admin/page.tsx                     daftar + form chapter
+  admin/page.tsx                     dashboard: KPI, grafik, timeline, konten
   admin/actions.ts                   server actions CRUD + audit
+  admin/chapters/page.tsx            daftar + form chapter
   admin/chapters/[id]/page.tsx
   admin/chapters/[id]/rooms/[roomId]/page.tsx
-  admin/media/page.tsx
-  admin/access/page.tsx
-  admin/history/page.tsx
+  admin/history/page.tsx             tab kunjungan + tab perubahan
   admin/settings/page.tsx
   robots.ts                          disallow all
   api/auth/session/route.ts
@@ -80,6 +79,7 @@ lib/
   validation/chapter.schema.ts  room.schema.ts  item.schema.ts
              playlist.schema.ts  invite.schema.ts
   visits.ts
+  visit-stats.ts                    agregasi harian murni (Asia/Jakarta)
   audit.ts
   security/origin.ts  headers.ts  urls.ts  paths.ts
   utils/cn.ts  format-date.ts

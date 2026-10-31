@@ -61,6 +61,8 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 | D-049 | 2026-10-31 | COOP untuk OAuth popup | `Cross-Origin-Opener-Policy` menjadi `same-origin-allow-popups`, menggantikan `same-origin` | `same-origin` memutus `window.opener` popup Google sehingga `signInWithPopup()` tidak pernah selesai: popup tertutup, tanpa request, tanpa error | Frame tetap dilarang (`X-Frame-Options: DENY`); hanya popup yang boleh mempertahankan opener; berlaku juga di produksi |
 | D-050 | 2026-10-31 | Admin sebagai blocking route | `export const instant = false` di `app/admin/layout.tsx` | `requireRole()` memanggil `cookies()` + `connection()` di luar `<Suspense>`, sehingga `next build` menolak `/admin` (uncached data saat prerender). Admin selalu butuh identitas per request, shell statis tidak menambah kecepatan | Tetap `redirect("/login")`/`redirect("/")` dari `requireRole`; halaman publik tetap memakai pola `<Suspense>` |
 | D-051 | 2026-10-31 | Batas ukuran foto | `max_file_size` tidak ikut ditandatangani; batas 25 MB dicek di browser sebelum unggah (`lib/media/photo-limits.ts`) | Cloudinary tidak memasukkan `max_file_size` ke string to sign sehingga tanda tangan dengan parameter itu ditolak `Invalid Signature` | Server tetap memegang `allowed_formats`, `folder`, `public_id`, `overwrite: false`; batas ukuran murni kenyamanan, bukan kontrol keamanan (kuota Cloudinary gratis yang menahan) |
+| D-052 | 2026-10-31 | `visits.session_hash` akhirnya diisi | `sha256(uid + ':' + YYYY-MM-DD Asia/Jakarta)` dihitung di `lib/visits.ts` sebelum insert | Kolomnya sudah ada di skema tetapi selalu `null`, sehingga statistik "unik per hari" mustahil dihitung | Tanpa IP dan tanpa cookie tambahan; tamu tanpa login tidak punya hash, jadi unik hanya mencakup user yang login |
+| D-053 | 2026-10-31 | Statistik diagregasi di JS, bukan SQL | `summarizeVisits()` di `lib/visit-stats.ts` mengambil baris jendela 14 hari lalu mengelompokkan per hari `Asia/Jakarta` | Dataset 2–20 user (D-001): satu query + grouping di memori lebih ringkas daripada `date_trunc` + `count(distinct)` yang juga harus mengisi hari kosong | Ganti ke `date_trunc` SQL bila `visits` melewati puluhan ribu baris; fungsi murninya sudah punya unit test |
 
 ---
 
@@ -75,5 +77,5 @@ Format: `ID | tanggal | topik | keputusan | alasan | dampak`
 ## Catatan
 
 - Keputusan stack (Next.js 16.4.3, Drizzle, Neon, Firebase Auth, Cloudinary, R2, Vercel, Serwist) ada di `docs/PRD.md` §3 dan sudah mengikat.
-- D-001 s.d. D-051 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
+- D-001 s.d. D-053 menggantikan seluruh daftar "Keputusan Terbuka" pada PRD versi 2.0.
 - Entri D-001 – D-041 ditulis sebelum rename D-044. Setiap kata "event" pada baris lama dibaca sebagai **chapter** (`events` → `chapters`, `event_id` → `chapter_id`, `events.starts_at` → `chapters.starts_at`). Keputusan isinya tidak berubah.

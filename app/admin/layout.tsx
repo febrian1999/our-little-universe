@@ -17,6 +17,12 @@ export default async function AdminLayout({
             <Link href="/admin" className="font-semibold text-neutral-900">
               Admin
             </Link>
+            <Link href="/admin/chapters" className="text-neutral-700">
+              Chapter
+            </Link>
+            <Link href="/admin/history" className="text-neutral-700">
+              History
+            </Link>
             <Link href="/" className="text-accent underline">
               Halaman utama
             </Link>

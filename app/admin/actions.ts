@@ -88,7 +88,7 @@ function parse<T extends z.ZodType>(
 
 export async function createChapterAction(formData: FormData) {
   const user = await requireRole("editor");
-  const from = "/admin";
+  const from = "/admin/chapters";
   const input = toChapterInput(parse(chapterSchema, formData, CHAPTER_KEYS, from));
 
   const chapter = await createChapter(input, user.id);
@@ -143,7 +143,7 @@ export async function deleteChapterAction(formData: FormData) {
     });
   }
   revalidatePath("/", "layout");
-  redirect("/admin");
+  redirect("/admin/chapters");
 }
 
 export async function createRoomAction(formData: FormData) {
