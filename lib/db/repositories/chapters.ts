@@ -65,7 +65,7 @@ export async function createChapter(input: ChapterInput, actorId: string) {
 
 export async function updateChapter(
   id: string,
-  patch: Partial<ChapterInput>,
+  patch: Partial<ChapterInput & { gateOpen: boolean }>,
   actorId: string,
 ) {
   const [row] = await getDb()

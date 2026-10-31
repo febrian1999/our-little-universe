@@ -146,8 +146,37 @@ export async function deleteChapterAction(formData: FormData) {
   redirect("/admin/chapters");
 }
 
-export async function createRoomAction(formData: FormData) {
-  const user = await requireRole("editor");
+/** PRD §5.5: hanya owner yang membuka/menutup gerbang. */
+export async function toggleGateAction(formData: FormData) {
+  const user = await requireRole("owner");
+  const id = String(formData.get("id") ?? "");
+  const from = "/admin/settings";
+
+  const before = await getChapterById(id);
+  if (!before) fail(from, "Chapter tidak ditemukan");
+
+  const after = await updateChapter(id, { gateOpen: !before.gateOpen }, user.id);
+  await insertAudit({
+    actorId: user.id,
+    action: "update",
+    entity: "chapter",
+    entityId: id,
+    chapterId: id,
+    before: { gateOpen: before.gateOpen },
+    after: { gateOpen: after?.gateOpen ?? false },
+  });
+  await recordVisit({
+    userId: user.id,
+    action: "gate_toggle",
+    path: from,
+    chapterId: id,
+  });
+
+  revalidatePath("/", "layout");
+  redirect(`${from}?ok=1`);
+}
+
+export async function createRoomAction(formData: FormData) {  const user = await requireRole("editor");
   const chapterId = String(formData.get("chapterId") ?? "");
   const from = `/admin/chapters/${chapterId}`;
 

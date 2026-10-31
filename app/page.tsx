@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { openGateAction } from "@/app/actions";
 import { getPrimaryChapter } from "@/lib/db/repositories/chapters";
 
 export default function LandingPage() {
@@ -79,12 +80,19 @@ async function GateCTA() {
         <span aria-hidden className="size-2 rounded-full bg-primary" />
         Gerbang terbuka
       </p>
-      <a
-        href={`/login?next=${encodeURIComponent(`/${chapter.slug}`)}`}
-        className="tap mt-4 flex w-full items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        Buka Gerbang
-      </a>
+      <form action={openGateAction} className="mt-4">
+        <input
+          type="hidden"
+          name="next"
+          value={`/login?next=${encodeURIComponent(`/${chapter.slug}`)}`}
+        />
+        <button
+          type="submit"
+          className="tap flex w-full items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-white transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Buka Gerbang
+        </button>
+      </form>
       <p className="mt-3 text-center text-sm text-neutral-500">
         Silakan masuk dengan akun yang sudah diundang.
       </p>

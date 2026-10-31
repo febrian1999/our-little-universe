@@ -23,6 +23,9 @@ export default async function AdminLayout({
             <Link href="/admin/history" className="text-neutral-700">
               History
             </Link>
+            <Link href="/admin/settings" className="text-neutral-700">
+              Setelan
+            </Link>
             <Link href="/" className="text-accent underline">
               Halaman utama
             </Link>

@@ -45,7 +45,8 @@ app/
   admin/chapters/[id]/page.tsx
   admin/chapters/[id]/rooms/[roomId]/page.tsx
   admin/history/page.tsx             tab kunjungan + tab perubahan
-  admin/settings/page.tsx
+  admin/settings/page.tsx            toggle gerbang (owner)
+  actions.ts                         server action publik (gate_open)
   robots.ts                          disallow all
   api/auth/session/route.ts
   api/guardian/route.ts
