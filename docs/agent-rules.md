@@ -6,10 +6,11 @@ Baca file ini **sebelum** menulis kode.
 Urutan baca yang disarankan:
 1. `AGENTS.md` (root, ditulis `next dev`)
 2. `docs/agent-rules.md` (file ini)
-3. `docs/PRD.md` bagian 3, 4, 7, 17
-4. `docs/schema.md` bagian 3 dan 4
-5. `node_modules/next/dist/docs/` untuk API Next.js versi terpasang
-6. `lib/db/schema.ts`
+3. `docs/status.md` — kondisi terkini: milestone mana yang selesai, apa yang sudah terbukti, apa yang belum, dan jebakan yang sudah memakan waktu
+4. `docs/PRD.md` bagian 3, 4, 7, 17
+5. `docs/schema.md` bagian 3 dan 4
+6. `node_modules/next/dist/docs/` untuk API Next.js versi terpasang
+7. `lib/db/schema.ts`
 
 `docs/manual-setup.md` berisi langkah yang **hanya bisa dilakukan pemilik akun** (GitHub, Neon, Cloudinary, R2, Firebase, Vercel). Agent tidak boleh mengarang kredensial atau menganggap langkah itu sudah selesai.
 
@@ -24,6 +25,7 @@ Urutan baca yang disarankan:
 5. **Kalau ragu, berhenti dan tanya.** Lebih baik satu pertanyaan daripada satu migrasi yang salah.
 6. **Tidak ada hard delete.** Semua penghapusan soft delete, dan media tidak ikut dihapus.
 7. **Framework dan library read-only.** Error diperbaiki di cara memanggil, bukan dengan mengedit sumber pihak ketiga.
+8. **Status ikut diperbarui.** Setiap milestone selesai: perbarui `docs/status.md` dan catat keputusan baru di `docs/decisions.md` dalam commit yang sama. Agent berikutnya tidak boleh menebak kondisi repo.
 
 ---
 
