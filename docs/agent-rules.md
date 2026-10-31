@@ -62,7 +62,7 @@ components/
   ambient-background.tsx
   guardian-status.tsx
   room-grid.tsx
-  playlist-card.tsx
+  lightbox.tsx
   playlist-player.tsx
   song-card.tsx
   song-picker.tsx
@@ -76,7 +76,7 @@ lib/
   db/index.ts  schema.ts
   db/repositories/chapters.ts  rooms.ts  items.ts  playlists.ts
                    visits.ts  users.ts  invites.ts  settings.ts
-  media/cloudinary.ts  r2.ts  image-loader.ts  spotify.ts
+  media/cloudinary.ts  r2.ts  image-loader.ts  spotify.ts  youtube.ts
   validation/chapter.schema.ts  room.schema.ts  item.schema.ts
              playlist.schema.ts  invite.schema.ts
   visits.ts

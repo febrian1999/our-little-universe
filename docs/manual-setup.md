@@ -141,7 +141,7 @@ Pooler Neon memakai PgBouncer dan tidak andal untuk DDL. Semua migrasi, seed, da
 - [ ] Jangan membuat unsigned upload preset; semua upload harus signed dari server
 - [ ] Opsional: buat folder `olu/` sebagai default
 
-Variabel: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
+Variabel: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, dan `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` (nilai sama dengan cloud name; dipakai loader `next/image` di browser).
 
 ---
 

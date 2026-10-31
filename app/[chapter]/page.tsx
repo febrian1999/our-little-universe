@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { RoomGrid } from "@/components/room-grid";
+import { EmptyState } from "@/components/ui/empty-state";
 import { requireUser } from "@/lib/auth";
 import { getChapterBySlug } from "@/lib/db/repositories/chapters";
 import { listRooms } from "@/lib/db/repositories/rooms";
@@ -30,7 +31,7 @@ async function Castle({ params }: { params: PageProps<"/[chapter]">["params"] })
   const rooms = await listRooms(chapter.id);
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-6xl">
       <header>
         <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">
           {chapter.title}
@@ -41,37 +42,19 @@ async function Castle({ params }: { params: PageProps<"/[chapter]">["params"] })
       </header>
 
       {rooms.length === 0 ? (
-        <p className="mt-10 rounded-3xl border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500">
-          Belum ada ruangan di Chapter ini.
-        </p>
+        <EmptyState>Belum ada ruangan di Chapter ini.</EmptyState>
       ) : (
-        <ul className="mt-8 grid gap-4 sm:grid-cols-2">
-          {rooms.map((room) => (
-            <li key={room.id}>
-              <Link
-                href={`/${chapter.slug}/${room.key}`}
-                className="flex h-full flex-col gap-1 rounded-3xl border border-neutral-200/80 bg-white/80 p-6 shadow-sm backdrop-blur transition hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                <span aria-hidden className="text-2xl">
-                  {room.icon}
-                </span>
-                <span className="text-lg font-semibold text-neutral-900">
-                  {room.title}
-                </span>
-                {room.description ? (
-                  <span className="text-sm leading-relaxed text-neutral-600">
-                    {room.description}
-                  </span>
-                ) : null}
-                {room.locked ? (
-                  <span className="mt-2 text-xs font-semibold text-neutral-500">
-                    Terkunci
-                  </span>
-                ) : null}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <RoomGrid
+          chapterSlug={chapter.slug}
+          rooms={rooms.map((room) => ({
+            id: room.id,
+            key: room.key,
+            title: room.title,
+            icon: room.icon,
+            description: room.description,
+            locked: room.locked,
+          }))}
+        />
       )}
     </div>
   );

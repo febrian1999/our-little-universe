@@ -10,7 +10,7 @@ import {
 import { getPrimaryChapter } from "@/lib/db/repositories/chapters";
 import { redeemInvite } from "@/lib/db/repositories/invites";
 import { provisionUser } from "@/lib/db/repositories/users";
-import { recordVisit } from "@/lib/db/repositories/visits";
+import { recordVisit } from "@/lib/visits";
 import { assertSameOrigin, ForbiddenError } from "@/lib/security/origin";
 import { safeNextPath } from "@/lib/security/paths";
 
