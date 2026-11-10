@@ -1,32 +1,52 @@
 import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/login-form";
+import { SparklesIcon } from "@/components/ui/sparkles";
 
 // PRD §5.2: sebelum login halaman hanya menampilkan copy generik. Kode
 // divalidasi di server saat redeem, bukan di sini.
 export default function InvitePage(props: PageProps<"/invite/[code]">) {
   return (
-    <main id="konten" className="relative grid flex-1 place-items-center px-6 py-16">
+    <main id="konten" className="relative grid min-h-dvh flex-1 place-items-center px-6 py-16">
       <div
         aria-hidden
-        className="ambient bg-[radial-gradient(60%_50%_at_20%_10%,#fce7f3_0%,transparent_60%),radial-gradient(50%_45%_at_85%_85%,#dbeafe_0%,transparent_65%)]"
+        className="ambient ambient-fairy"
       />
 
-      <section className="w-full max-w-md rounded-3xl border border-neutral-200/80 bg-white/80 p-8 shadow-sm backdrop-blur">
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-          Sebuah undangan
-        </h1>
-        <p className="mt-2 mb-6 text-base leading-relaxed text-neutral-600">
-          Masuk dengan akun yang menerima undangan ini. Kalau tautannya sudah
-          kedaluwarsa, pintunya akan tetap tertutup.
-        </p>
+      <section className="glass-panel relative w-full max-w-md overflow-hidden rounded-[2rem] p-8 text-center sm:p-10">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-20 left-1/2 size-40 -translate-x-1/2 rounded-full bg-pink-300/30 blur-2xl"
+        />
 
-        <Suspense
-          fallback={
-            <p className="min-h-24 text-sm text-neutral-500">Memuat…</p>
-          }
-        >
-          <InvitePanel params={props.params} />
-        </Suspense>
+        <div className="relative flex flex-col items-center">
+          <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-100 to-amber-100 text-pink-500 shadow-xs ring-1 ring-white/80">
+            <SparklesIcon className="size-6" />
+          </div>
+
+          <p className="text-xs font-semibold tracking-widest text-pink-500 uppercase">
+            Special Invitation
+          </p>
+
+          <h1 className="mt-2 font-serif text-3xl font-normal tracking-tight text-neutral-900">
+            Sebuah Undangan
+          </h1>
+
+          <p className="mt-2 mb-6 text-sm leading-relaxed text-neutral-600">
+            Masuk dengan akun yang menerima undangan ini. Kalau tautannya sudah
+            kedaluwarsa, pintunya akan tetap tertutup.
+          </p>
+
+          <Suspense
+            fallback={
+              <div className="flex min-h-24 items-center justify-center gap-2 text-xs text-neutral-500">
+                <span aria-hidden className="size-2 animate-pulse rounded-full bg-pink-400" />
+                Memuat undangan…
+              </div>
+            }
+          >
+            <InvitePanel params={props.params} />
+          </Suspense>
+        </div>
       </section>
     </main>
   );
