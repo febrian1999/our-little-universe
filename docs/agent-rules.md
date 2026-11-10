@@ -6,10 +6,11 @@ Baca file ini **sebelum** menulis kode.
 Urutan baca yang disarankan:
 1. `AGENTS.md` (root, ditulis `next dev`)
 2. `docs/agent-rules.md` (file ini)
-3. `docs/PRD.md` bagian 3, 4, 7, 17
-4. `docs/schema.md` bagian 3 dan 4
-5. `node_modules/next/dist/docs/` untuk API Next.js versi terpasang
-6. `lib/db/schema.ts`
+3. `docs/status.md` — kondisi terkini: milestone mana yang selesai, apa yang sudah terbukti, apa yang belum, dan jebakan yang sudah memakan waktu
+4. `docs/PRD.md` bagian 3, 4, 7, 17
+5. `docs/schema.md` bagian 3 dan 4
+6. `node_modules/next/dist/docs/` untuk API Next.js versi terpasang
+7. `lib/db/schema.ts`
 
 `docs/manual-setup.md` berisi langkah yang **hanya bisa dilakukan pemilik akun** (GitHub, Neon, Cloudinary, R2, Firebase, Vercel). Agent tidak boleh mengarang kredensial atau menganggap langkah itu sudah selesai.
 
@@ -24,6 +25,7 @@ Urutan baca yang disarankan:
 5. **Kalau ragu, berhenti dan tanya.** Lebih baik satu pertanyaan daripada satu migrasi yang salah.
 6. **Tidak ada hard delete.** Semua penghapusan soft delete, dan media tidak ikut dihapus.
 7. **Framework dan library read-only.** Error diperbaiki di cara memanggil, bukan dengan mengedit sumber pihak ketiga.
+8. **Status ikut diperbarui.** Setiap milestone selesai: perbarui `docs/status.md` dan catat keputusan baru di `docs/decisions.md` dalam commit yang sama. Agent berikutnya tidak boleh menebak kondisi repo.
 
 ---
 
@@ -38,16 +40,18 @@ app/
   (app)/[chapter]/page.tsx           castle map / menu utama
   (app)/[chapter]/[roomKey]/page.tsx  room feed atau room playlist
   (app)/[chapter]/connect/page.tsx
-  admin/layout.tsx
-  admin/page.tsx
-  admin/chapters/page.tsx
+  admin/layout.tsx                   instant = false (blocking route)
+  admin/page.tsx                     dashboard: KPI, grafik, timeline, konten
+  admin/actions.ts                   server actions CRUD + audit
+  admin/chapters/page.tsx            daftar + form chapter
   admin/chapters/[id]/page.tsx
   admin/chapters/[id]/rooms/[roomId]/page.tsx
-  admin/media/page.tsx
-  admin/access/page.tsx
-  admin/history/page.tsx
-  admin/settings/page.tsx
+  admin/history/page.tsx             tab kunjungan + tab perubahan
+  admin/settings/page.tsx            toggle gerbang (owner)
+  actions.ts                         server action publik (gate_open)
   robots.ts                          disallow all
+  manifest.ts                        manifest PWA
+  apple-icon.png                     ikon iOS 180px
   api/auth/session/route.ts
   api/guardian/route.ts
   api/upload/sign/route.ts
@@ -60,31 +64,36 @@ components/
   ui/button.tsx
   ui/empty-state.tsx
   ambient-background.tsx
+  service-worker.tsx                 daftar /sw.js
   guardian-status.tsx
   room-grid.tsx
-  playlist-card.tsx
+  lightbox.tsx
   playlist-player.tsx
   song-card.tsx
   song-picker.tsx
   video-poster-upload.tsx
   admin/kpi-card.tsx
   admin/timeline-table.tsx
-  admin/item-form.tsx
-  admin/playlist-form.tsx
+  admin/form.tsx                    field/notice/card bersama
+  admin/photo-upload.tsx            unggah foto bertanda tangan
 lib/
   auth/index.ts  firebase.ts  firebase-admin.ts  session.ts  roles.ts
   db/index.ts  schema.ts
   db/repositories/chapters.ts  rooms.ts  items.ts  playlists.ts
                    visits.ts  users.ts  invites.ts  settings.ts
-  media/cloudinary.ts  r2.ts  image-loader.ts  spotify.ts
+  media/cloudinary.ts  photo-limits.ts  r2.ts  image-loader.ts  spotify.ts  youtube.ts
   validation/chapter.schema.ts  room.schema.ts  item.schema.ts
              playlist.schema.ts  invite.schema.ts
   visits.ts
+  visit-stats.ts                    agregasi harian murni (Asia/Jakarta)
   audit.ts
-  security/origin.ts  headers.ts  urls.ts  paths.ts
+  security/origin.ts  headers.ts  csp.ts  urls.ts  paths.ts
   utils/cn.ts  format-date.ts
 docs/
   PRD.md  schema.md  agent-rules.md  decisions.md
+public/
+  sw.js                              service worker minimal (tanpa cache)
+  icons/icon-192.png  icon-512.png
 drizzle/
 scripts/
   seed.mts  backup.ts

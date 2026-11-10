@@ -7,7 +7,7 @@ import { safeNextPath } from "@/lib/security/paths";
 
 export default function LoginPage(props: PageProps<"/login">) {
   return (
-    <main className="relative grid flex-1 place-items-center px-6 py-16">
+    <main id="konten" className="relative grid flex-1 place-items-center px-6 py-16">
       <div
         aria-hidden
         className="ambient bg-[radial-gradient(60%_50%_at_20%_10%,#fce7f3_0%,transparent_60%),radial-gradient(50%_45%_at_85%_85%,#dbeafe_0%,transparent_65%)]"
