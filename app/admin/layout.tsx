@@ -23,6 +23,11 @@ export default async function AdminLayout({
             <Link href="/admin/history" className="text-neutral-700">
               History
             </Link>
+            {user.role === "owner" ? (
+              <Link href="/admin/access" className="text-neutral-700">
+                Akses
+              </Link>
+            ) : null}
             <Link href="/admin/settings" className="text-neutral-700">
               Setelan
             </Link>

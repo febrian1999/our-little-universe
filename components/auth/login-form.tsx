@@ -1,13 +1,15 @@
 "use client";
 
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import Link from "next/link";
 import { useState } from "react";
 import { firebaseAuth } from "@/lib/auth/firebase";
 
 // ponytail: email link menyusul bersama /auth/action; saat ini Google saja.
 const MESSAGES: Record<string, string> = {
-  not_allowed: "Akun ini belum diundang. Minta tautan undangan dulu, ya.",
-  invalid_invite: "Undangan tidak valid atau sudah kedaluwarsa.",
+  not_allowed: "Akun ini belum punya akses. Kirim permintaan dulu, ya.",
+  invalid_invite:
+    "Undangan tidak valid, kedaluwarsa, atau bukan untuk email ini.",
   invalid_token: "Sesi Firebase tidak sah. Coba masuk ulang.",
   forbidden: "Permintaan ditolak (origin tidak cocok).",
   bad_request: "Permintaan tidak lengkap. Coba lagi.",
@@ -94,6 +96,16 @@ export function LoginForm({ next, invite }: { next?: string; invite?: string }) 
           className="mt-4 rounded-2xl bg-rose-50/90 p-3 text-center text-xs leading-relaxed text-rose-600 ring-1 ring-rose-200/70"
         >
           {error}
+          {!invite ? (
+            <span className="mt-2 block">
+              <Link
+                href="/request-access"
+                className="font-semibold text-rose-700 underline"
+              >
+                Minta akses di sini
+              </Link>
+            </span>
+          ) : null}
         </div>
       ) : (
         <p className="mt-4 text-center text-xs text-neutral-400">

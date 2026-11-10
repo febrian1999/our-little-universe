@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import {
+  accessRequestSchema,
+  generateInviteCode,
+  inviteSchema,
+} from "./access.schema";
 import { chapterSchema, toChapterInput } from "./chapter.schema";
 import { itemSchema, toItemInput } from "./item.schema";
 import { playlistSchema, toPlaylistInput } from "./playlist.schema";
@@ -110,5 +115,25 @@ describe("itemSchema", () => {
       itemSchema.safeParse({ type: "text", songUrl: "https://evil.com/lagu" })
         .success,
     ).toBe(false);
+  });
+});
+
+describe("access.schema", () => {
+  it("kode undangan 8 karakter dari alfabet aman, unik per panggilan", () => {
+    const codes = new Set(Array.from({ length: 50 }, () => generateInviteCode()));
+    for (const code of codes) {
+      expect(code).toMatch(/^[A-HJ-NP-Z2-9]{8}$/);
+    }
+    expect(codes.size).toBeGreaterThan(45);
+  });
+
+  it("undangan tanpa email boleh; email salah format ditolak", () => {
+    expect(inviteSchema.safeParse({ email: "" }).success).toBe(true);
+    expect(inviteSchema.safeParse({ email: "bukan-email" }).success).toBe(false);
+  });
+
+  it("permintaan akses wajib punya nama", () => {
+    expect(accessRequestSchema.safeParse({ name: "A" }).success).toBe(false);
+    expect(accessRequestSchema.safeParse({ name: "Febrian" }).success).toBe(true);
   });
 });
