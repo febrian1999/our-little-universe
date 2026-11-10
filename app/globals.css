@@ -2,12 +2,14 @@
 
 @theme {
   --color-primary: #ec4899;
-  --color-accent: #2563eb;
+  --color-accent: #db2777;
+  --color-universe-gold: #f59e0b;
 }
 
 @theme inline {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-serif: var(--font-serif), Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
 body {
@@ -46,6 +48,58 @@ textarea {
   z-index: -1;
   pointer-events: none;
   overflow: clip;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+/* Glassmorphism Dreamy */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 10px 30px -5px rgba(236, 72, 153, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px -4px rgba(236, 72, 153, 0.14), 0 0 16px rgba(244, 114, 182, 0.2);
+  border-color: rgba(244, 114, 182, 0.4);
+}
+
+/* Dreamy Glow Button */
+.btn-dreamy {
+  min-height: 44px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #f472b6 0%, #db2777 50%, #be185d 100%);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 4px 14px 0 rgba(219, 39, 119, 0.35);
+  transition: all 0.25s ease;
+}
+
+.btn-dreamy:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 6px 20px 0 rgba(219, 39, 119, 0.48);
+}
+
+.btn-dreamy:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Ambient Dreamy Universe Background */
+.ambient-fairy {
+  background:
+    radial-gradient(ellipse 65% 55% at 15% 15%, rgba(252, 231, 243, 0.85) 0%, transparent 70%),
+    radial-gradient(ellipse 55% 50% at 85% 20%, rgba(254, 243, 199, 0.7) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 60% at 50% 85%, rgba(237, 233, 254, 0.8) 0%, transparent 70%),
+    #fffdfc;
 }
 
 @media (prefers-reduced-motion: reduce) {

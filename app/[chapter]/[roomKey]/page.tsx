@@ -22,11 +22,16 @@ export default function RoomPage(props: PageProps<"/[chapter]/[roomKey]">) {
     <main id="konten" className="relative flex-1 px-6 py-12">
       <div
         aria-hidden
-        className="ambient bg-[radial-gradient(60%_50%_at_20%_10%,#fce7f3_0%,transparent_60%),radial-gradient(50%_45%_at_85%_85%,#dbeafe_0%,transparent_65%)]"
+        className="ambient ambient-fairy"
       />
 
       <Suspense
-        fallback={<p className="text-sm text-neutral-500">Membuka ruangan…</p>}
+        fallback={
+          <div className="mx-auto flex max-w-2xl items-center gap-2 text-sm text-neutral-500">
+            <span aria-hidden className="size-2 animate-pulse rounded-full bg-pink-400" />
+            Membuka ruangan…
+          </div>
+        }
       >
         <Room params={props.params} searchParams={props.searchParams} />
       </Suspense>
@@ -72,19 +77,33 @@ async function Room({
 
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <Link href={`/${chapter.slug}`} className="text-sm text-accent underline">
-        ← {chapter.title}
+      <Link
+        href={`/${chapter.slug}`}
+        className="group inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3.5 py-1 text-xs font-semibold text-neutral-600 shadow-xs ring-1 ring-neutral-200/60 backdrop-blur transition hover:text-pink-600 hover:ring-pink-300"
+      >
+        <span aria-hidden className="transition group-hover:-translate-x-0.5">←</span>
+        <span>Kembali ke {chapter.title}</span>
       </Link>
 
-      <header className="mt-4">
-        <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">
-          <span aria-hidden className="mr-2">
-            {room.icon}
-          </span>
-          {room.title}
-        </h1>
+      <header className="mt-6">
+        <div className="flex items-center gap-3">
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-white/80 text-2xl shadow-xs ring-1 ring-pink-100">
+            <span aria-hidden>{room.icon}</span>
+          </div>
+          <div>
+            <h1 className="font-serif text-3xl font-normal tracking-tight text-neutral-900 sm:text-4xl">
+              {room.title}
+            </h1>
+            <p className="text-xs tracking-wider text-pink-500 uppercase">
+              {room.kind === "playlist" ? "Music Room" : "Memory Room"}
+            </p>
+          </div>
+        </div>
+
         {room.description ? (
-          <p className="mt-2 text-base text-neutral-600">{room.description}</p>
+          <p className="mt-3 text-base leading-relaxed text-neutral-600">
+            {room.description}
+          </p>
         ) : null}
       </header>
 
@@ -161,11 +180,11 @@ async function FeedSection({
         </div>
       ) : null}
 
-      <div className="mt-8 space-y-4">
+      <div className="mt-8 space-y-5">
         {others.map((item) => (
           <article
             key={item.id}
-            className="rounded-3xl border border-neutral-200/80 bg-white/80 p-4 shadow-sm backdrop-blur"
+            className="glass-panel overflow-hidden rounded-3xl p-5 shadow-xs sm:p-6"
           >
             {item.type === "video" && item.provider === "youtube" && item.url ? (
               <YouTubeEmbed url={item.url} title={item.caption ?? "Video"} />

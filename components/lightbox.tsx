@@ -35,24 +35,31 @@ export function PhotoGrid({ photos }: { photos: Photo[] }) {
 
   return (
     <>
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6">
         {photos.map((photo, index) => (
           <li key={photo.id}>
             <button
               type="button"
               onClick={() => setOpen(index)}
               aria-label={photo.caption ?? "Buka foto"}
-              className="tap block w-full overflow-hidden rounded-2xl bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="tap group block w-full overflow-hidden rounded-2xl bg-white p-2.5 pb-4 shadow-sm ring-1 ring-neutral-200/70 transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:ring-pink-300/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              <Image
-                loader={cloudinaryLoader}
-                src={photo.publicId}
-                alt={photo.caption ?? ""}
-                width={400}
-                height={400}
-                sizes="(max-width: 640px) 50vw, 33vw"
-                className="size-full object-cover"
-              />
+              <div className="aspect-square w-full overflow-hidden rounded-xl bg-neutral-100">
+                <Image
+                  loader={cloudinaryLoader}
+                  src={photo.publicId}
+                  alt={photo.caption ?? ""}
+                  width={400}
+                  height={400}
+                  sizes="(max-width: 640px) 50vw, 33vw"
+                  className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+              </div>
+              {photo.caption ? (
+                <p className="mt-2.5 truncate px-1 text-center font-serif text-xs text-neutral-600 group-hover:text-pink-600">
+                  {photo.caption}
+                </p>
+              ) : null}
             </button>
           </li>
         ))}
