@@ -234,6 +234,23 @@ export const items = pgTable(
   (t) => [index("items_room_order_idx").on(t.roomId, t.sortOrder)],
 );
 
+export const playlistMoods = pgTable(
+  "playlist_moods",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    emoji: text("emoji").notNull().default("🎧"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...auditable(),
+  },
+  (t) => [
+    uniqueIndex("playlist_moods_key_active_idx")
+      .on(t.key)
+      .where(sql`deleted_at is null`),
+  ],
+);
+
 export const playlists = pgTable(
   "playlists",
   {
@@ -241,6 +258,9 @@ export const playlists = pgTable(
     roomId: uuid("room_id")
       .notNull()
       .references(() => rooms.id),
+    moodId: uuid("mood_id").references(() => playlistMoods.id, {
+      onDelete: "set null",
+    }),
     provider: mediaProvider("provider").notNull().default("spotify"),
     url: text("url").notNull(),
     title: text("title").notNull(),

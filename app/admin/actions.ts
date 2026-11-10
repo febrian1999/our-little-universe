@@ -73,7 +73,7 @@ const ITEM_KEYS = [
   "songStartS",
   "sortOrder",
 ] as const;
-const PLAYLIST_KEYS = ["url", "title", "sortOrder"] as const;
+const PLAYLIST_KEYS = ["url", "title", "sortOrder", "moodId"] as const;
 
 function parse<T extends z.ZodType>(
   schema: T,

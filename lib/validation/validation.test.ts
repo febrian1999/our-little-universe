@@ -75,6 +75,35 @@ describe("playlistSchema", () => {
       ),
     ).toBeNull();
   });
+
+  it("mood opsional: kosong jadi null, uuid valid diteruskan", () => {
+    const uuid = "11111111-1111-4111-8111-111111111111";
+    const tanpa = toPlaylistInput(
+      playlistSchema.parse({
+        url: "https://open.spotify.com/playlist/7KAtx1ihS4vdjVcdI5pJb0",
+        title: "Malam",
+        moodId: "",
+      }),
+    );
+    expect(tanpa?.moodId).toBeNull();
+
+    const dengan = toPlaylistInput(
+      playlistSchema.parse({
+        url: "https://open.spotify.com/playlist/7KAtx1ihS4vdjVcdI5pJb0",
+        title: "Malam",
+        moodId: uuid,
+      }),
+    );
+    expect(dengan?.moodId).toBe(uuid);
+
+    expect(
+      playlistSchema.safeParse({
+        url: "https://open.spotify.com/playlist/7KAtx1ihS4vdjVcdI5pJb0",
+        title: "Malam",
+        moodId: "bukan-uuid",
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("itemSchema", () => {

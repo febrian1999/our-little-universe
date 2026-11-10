@@ -12,6 +12,7 @@ import { Card, Field, Notice, Select, TextArea } from "@/components/admin/form";
 import { PhotoUpload } from "@/components/admin/photo-upload";
 import { getChapterById } from "@/lib/db/repositories/chapters";
 import { listItems } from "@/lib/db/repositories/items";
+import { listMoods } from "@/lib/db/repositories/playlist-moods";
 import { listPlaylists } from "@/lib/db/repositories/playlists";
 import { getRoomById } from "@/lib/db/repositories/rooms";
 
@@ -193,7 +194,13 @@ async function PlaylistSection({
   roomId: string;
   from: string;
 }) {
-  const playlists = await listPlaylists(roomId);
+  const [playlists, moods] = await Promise.all([
+    listPlaylists(roomId),
+    listMoods(),
+  ]);
+  const moodLabel = new Map(
+    moods.map((mood) => [mood.id, `${mood.emoji} ${mood.label}`]),
+  );
 
   return (
     <>
@@ -208,7 +215,11 @@ async function PlaylistSection({
               <span className="font-semibold text-neutral-900">
                 {playlist.title}
               </span>{" "}
-              <span className="text-neutral-500">{playlist.url}</span>
+              <span className="text-neutral-500">
+                {playlist.moodId
+                  ? (moodLabel.get(playlist.moodId) ?? "mood terhapus")
+                  : "tanpa mood"}
+              </span>
             </span>
             <form action={deletePlaylistAction}>
               <input type="hidden" name="id" value={playlist.id} />
@@ -243,6 +254,18 @@ async function PlaylistSection({
           required
         />
         <Field label="Judul" name="title" required />
+        <Select
+          label="Mood"
+          name="moodId"
+          defaultValue=""
+          options={[
+            { value: "", label: "Tanpa mood" },
+            ...moods.map((mood) => ({
+              value: mood.id,
+              label: `${mood.emoji} ${mood.label}`,
+            })),
+          ]}
+        />
         <Field label="Urutan" name="sortOrder" type="number" defaultValue="0" />
         <button type="submit" className="btn-primary sm:col-span-2">
           Simpan playlist

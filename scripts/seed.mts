@@ -1,6 +1,6 @@
 import { loadEnvFile } from "node:process";
 import { neon } from "@neondatabase/serverless";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import * as s from "../lib/db/schema.ts";
 import { canonicalSpotifyPlaylist } from "../lib/security/urls.ts";
@@ -27,11 +27,31 @@ const PLAYLISTS = [
   {
     title: "Our Little Universe",
     raw: "https://open.spotify.com/playlist/7KAtx1ihS4vdjVcdI5pJb0?si=4580714424e24050",
+    mood: "princess",
   },
   {
     title: "Teman Menulis",
     raw: "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
+    mood: "midnight",
   },
+  {
+    title: "Echa's Daily Playlist",
+    raw: "https://open.spotify.com/playlist/6Q9nQactoasvya7zQmy4PK",
+    mood: "comfort",
+  },
+  {
+    title: "Coffee & Study",
+    raw: "https://open.spotify.com/playlist/4lscWbdYDo6g4f7sNbCXSO",
+    mood: "coffee",
+  },
+];
+
+/** Kamus mood (D-060). Satu playlist merujuk satu mood lewat `mood_id`. */
+const MOODS = [
+  { key: "princess", label: "Soft Princess", emoji: "🌸", sortOrder: 0 },
+  { key: "coffee", label: "Coffee Date", emoji: "☕", sortOrder: 1 },
+  { key: "midnight", label: "Midnight Ride", emoji: "🌙", sortOrder: 2 },
+  { key: "comfort", label: "Comfort Songs", emoji: "🤍", sortOrder: 3 },
 ];
 
 async function seedUsers() {
@@ -174,22 +194,55 @@ async function seedItems(roomsList: Awaited<ReturnType<typeof seedRooms>>, owner
   }
 }
 
-async function seedPlaylists(roomsList: Awaited<ReturnType<typeof seedRooms>>) {
+async function seedMoods(ownerId: string) {
+  for (const mood of MOODS) {
+    await db
+      .insert(s.playlistMoods)
+      .values({ ...mood, updatedBy: ownerId })
+      .onConflictDoNothing();
+  }
+  return db.select().from(s.playlistMoods).where(isNull(s.playlistMoods.deletedAt));
+}
+
+async function seedPlaylists(
+  roomsList: Awaited<ReturnType<typeof seedRooms>>,
+  moodsList: Awaited<ReturnType<typeof seedMoods>>,
+) {
   const room = roomsList.find((r) => r.key === "music");
   if (!room) return;
+
+  const moodIdByKey = new Map(moodsList.map((mood) => [mood.key, mood.id]));
 
   for (const [i, p] of PLAYLISTS.entries()) {
     const canonical = canonicalSpotifyPlaylist(p.raw);
     if (!canonical) throw new Error(`URL playlist tidak valid: ${p.raw}`);
-    await db
+    const moodId = moodIdByKey.get(p.mood) ?? null;
+
+    // onConflictDoNothing: playlist lama tidak ditimpa; mood lama diisi lewat UPDATE.
+    const inserted = await db
       .insert(s.playlists)
       .values({
         roomId: room.id,
         url: canonical.url,
         title: p.title,
         sortOrder: i,
+        moodId,
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: s.playlists.id });
+
+    if (inserted.length === 0 && moodId) {
+      await db
+        .update(s.playlists)
+        .set({ moodId })
+        .where(
+          and(
+            eq(s.playlists.roomId, room.id),
+            eq(s.playlists.url, canonical.url),
+            isNull(s.playlists.moodId),
+          ),
+        );
+    }
   }
 }
 
@@ -227,11 +280,12 @@ async function main() {
   const chapter = await seedChapter(owner.id);
   const roomsList = await seedRooms(chapter.id, owner.id);
   await seedItems(roomsList, owner.id);
-  await seedPlaylists(roomsList);
+  const moodsList = await seedMoods(owner.id);
+  await seedPlaylists(roomsList, moodsList);
   await seedSettingsAndInvite(owner.id);
 
   console.log(
-    `seed selesai: 1 chapter, ${roomsList.length} room, ${PLAYLISTS.length} playlist, invite DEMO2026`,
+    `seed selesai: 1 chapter, ${roomsList.length} room, ${MOODS.length} mood, ${PLAYLISTS.length} playlist, invite DEMO2026`,
   );
 }
 

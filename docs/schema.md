@@ -161,12 +161,28 @@ create table items (
   deleted_by    uuid references users(id) on delete set null
 );
 
+-- ============ PLAYLIST MOODS ============
+-- Kamus mood untuk playlist (D-060). Satu playlist merujuk satu mood.
+create table playlist_moods (
+  id         uuid primary key default gen_random_uuid(),
+  key        text not null,           -- princess | coffee | midnight | comfort
+  label      text not null,
+  emoji      text not null default '🎧',
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid references users(id) on delete set null,
+  deleted_at timestamptz,
+  deleted_by uuid references users(id) on delete set null
+);
+
 -- ============ PLAYLISTS ============
 -- Kontainer playlist Spotify milik satu room bertipe 'playlist'.
 -- Tidak menyimpan feed; feed tetap di items room bertipe 'feed'.
 create table playlists (
   id         uuid primary key default gen_random_uuid(),
   room_id    uuid not null references rooms(id),
+  mood_id    uuid references playlist_moods(id) on delete set null,  -- null = tanpa mood
   provider   media_provider not null default 'spotify',
   url        text not null,          -- kanonik: https://open.spotify.com/playlist/{id}, tanpa ?si=
   title      text not null,
@@ -553,11 +569,23 @@ export const auditLogs = pgTable(
 
 Untuk `type = 'song'`, lagu disimpan di `provider`/`url` dan `song_*` dibiarkan `none`. `song_*` hanya dipakai item non-lagu.
 
+### `playlist_moods`
+
+Kamus mood untuk playlist (D-060).
+
+| Kolom | Keterangan |
+|---|---|
+| `key` | Kunci stabil: `princess`, `coffee`, `midnight`, `comfort`; unik di antara baris aktif |
+| `label` | Nama tampil, mis. "Soft Princess" |
+| `emoji` | Ikon chip, mis. `🌸` |
+| `sort_order` | Urutan chip di UI |
+
 ### `playlists`
 
 | Kolom | Keterangan |
 |---|---|
 | `room_id` | Room bertipe `playlist`; playlist tidak bisa menempel ke room `feed` (divalidasi repository) |
+| `mood_id` | FK ke `playlist_moods`; `null` = tanpa mood. Satu playlist satu mood (D-060) |
 | `provider` | `spotify` untuk v1; nilai lain ditolak validasi |
 | `url` | Kanonik `https://open.spotify.com/playlist/{22 karakter}`; `?si=` dan parameter lain dibuang |
 | `title` | Label kartu, maks 200 karakter |
@@ -567,6 +595,7 @@ Aturan:
 - Satu URL aktif hanya boleh muncul sekali per room (unique parsial `(room_id, url)`).
 - Embed dibentuk server dari ID playlist yang sudah divalidasi; URL mentah tidak pernah masuk `iframe src`.
 - Playlist **tidak** punya feed. Postingan dengan lagu tempelan tetap di room `feed`.
+- Filter mood lewat `?mood=<mood_id>`; `mood_id` dihapus (`on delete set null`) → playlist kembali "tanpa mood", baris tidak hilang.
 
 ### `visits`
 

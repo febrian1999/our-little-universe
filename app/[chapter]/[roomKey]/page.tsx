@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { hasMinRole, requireUser } from "@/lib/auth";
 import { getChapterBySlug } from "@/lib/db/repositories/chapters";
 import { ITEMS_PER_PAGE, listItems } from "@/lib/db/repositories/items";
+import { listMoods } from "@/lib/db/repositories/playlist-moods";
 import { listPlaylists } from "@/lib/db/repositories/playlists";
 import { getRoom } from "@/lib/db/repositories/rooms";
 import { cloudinaryLoader } from "@/lib/media/image-loader";
@@ -108,7 +109,12 @@ async function Room({
       </header>
 
       {room.kind === "playlist" ? (
-        <PlaylistSection roomId={room.id} />
+        <PlaylistSection
+          roomId={room.id}
+          slug={chapter.slug}
+          roomKey={roomKey}
+          rawMood={Array.isArray(query.mood) ? query.mood[0] : query.mood}
+        />
       ) : (
         <FeedSection roomId={room.id} page={page} slug={slug} roomKey={roomKey} />
       )}
@@ -116,19 +122,77 @@ async function Room({
   );
 }
 
-async function PlaylistSection({ roomId }: { roomId: string }) {
-  const rows = await listPlaylists(roomId);
-  if (rows.length === 0) return <EmptyState>Belum ada playlist di sini.</EmptyState>;
+async function PlaylistSection({
+  roomId,
+  slug,
+  roomKey,
+  rawMood,
+}: {
+  roomId: string;
+  slug: string;
+  roomKey: string;
+  rawMood?: string;
+}) {
+  const moods = await listMoods();
+  const selected = moods.find((mood) => mood.id === rawMood);
+  const rows = await listPlaylists(roomId, selected?.id);
+  const base = `/${slug}/${roomKey}`;
+
+  const chips = (
+    <nav className="mt-6 flex flex-wrap gap-2 text-xs">
+      <Link
+        href={base}
+        aria-current={selected ? undefined : "page"}
+        className={`tap rounded-full px-3 py-1.5 font-semibold ${
+          selected
+            ? "border border-neutral-300 text-neutral-700"
+            : "bg-accent text-white"
+        }`}
+      >
+        Semua
+      </Link>
+      {moods.map((mood) => (
+        <Link
+          key={mood.id}
+          href={`${base}?mood=${mood.id}`}
+          aria-current={selected?.id === mood.id ? "page" : undefined}
+          className={`tap rounded-full px-3 py-1.5 font-semibold ${
+            selected?.id === mood.id
+              ? "bg-accent text-white"
+              : "border border-neutral-300 text-neutral-700"
+          }`}
+        >
+          {mood.emoji} {mood.label}
+        </Link>
+      ))}
+    </nav>
+  );
+
+  if (rows.length === 0) {
+    return (
+      <>
+        {chips}
+        <EmptyState>
+          {selected
+            ? `Belum ada playlist bermood ${selected.label}.`
+            : "Belum ada playlist di sini."}
+        </EmptyState>
+      </>
+    );
+  }
 
   return (
-    <PlaylistPlayer
-      playlists={rows.map((row) => ({
-        id: row.id,
-        title: row.title,
-        url: row.url,
-        embedUrl: spotifyPlaylistEmbed(row.url),
-      }))}
-    />
+    <>
+      {chips}
+      <PlaylistPlayer
+        playlists={rows.map((row) => ({
+          id: row.id,
+          title: row.title,
+          url: row.url,
+          embedUrl: spotifyPlaylistEmbed(row.url),
+        }))}
+      />
+    </>
   );
 }
 

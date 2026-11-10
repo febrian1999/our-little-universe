@@ -15,6 +15,13 @@
       "when": 1794291428624,
       "tag": "0001_luxuriant_sister_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794295445887,
+      "tag": "0002_whole_misty_knight",
+      "breakpoints": true
     }
   ]
 }

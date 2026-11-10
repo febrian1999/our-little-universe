@@ -32,7 +32,8 @@ Satu milestone jalan setelah pemilik memberi izin.
 | M7 | toggle gerbang (owner) + pencatatan `gate_open` | selesai | `5d5bc02` |
 | M8 | PWA installable, CSP mengikat, skip link | selesai | `38fc9fd` |
 | M9 | perbaikan auth produksi (jose v5 override + `serverExternalPackages`) | selesai | `8bef11f` |
-| M10 | permintaan akses + undangan ber-email + kelola pengguna (`/request-access`, `/admin/access`) | selesai | — |
+| M10 | permintaan akses + undangan ber-email + kelola pengguna (`/request-access`, `/admin/access`) | selesai | `c509074` |
+| M11 | mood playlist (`playlist_moods` + `playlists.mood_id` + filter chip) | selesai | — |
 | — | `/admin/media` (galeri media read-only) | **belum** | — |
 | — | deploy Vercel + PR `development` → `main` | **belum** | — |
 
@@ -51,7 +52,7 @@ Diuji pada `next start` lokal dengan permintaan HTTP sungguhan, bukan hanya baca
 | History | `/admin/history` menampilkan `gate_toggle` dan `gate_open` |
 | CSP | header penuh terkirim di `/login` dan `/admin` |
 | PWA | `/sw.js`, `/manifest.webmanifest`, `/icons/icon-192.png`, `/icons/icon-512.png`, `/apple-icon.png` → 200; `rel="manifest"` + `apple-touch-icon` ada di HTML |
-| Mutu | `typecheck` hijau, `lint` 0 warning, `test:run` **76 lulus / 16 file**, `next build` exit **0** |
+| Mutu | `typecheck` hijau, `lint` 0 warning, `test:run` **77 lulus / 16 file**, `next build` exit **0** |
 
 ---
 
@@ -66,6 +67,8 @@ Diuji pada `next start` lokal dengan permintaan HTTP sungguhan, bukan hanya baca
 | Editor tidak bisa toggle/role | DB baru punya satu user `owner`; butuh undangan dipakai dulu |
 | Alur permintaan akses ujung-ke-ujung | halaman + endpoint + migrasi ada, tetapi belum dijalankan dengan akun sungguhan di produksi |
 | Migrasi `0001` di Neon | SQL sudah digenerate, belum di-`db:migrate` (butuh `DATABASE_URL_UNPOOLED`) |
+| Migrasi `0002` (mood) di Neon | idem; belum dijalankan |
+| Filter mood playlist | kode ada, tetapi belum diuji dengan data mood nyata di DB |
 | `api/upload/r2/presign`, `scripts/backup.ts` | kredensial R2 belum ada, jadi belum dibuat |
 | Deploy Vercel | pernah gagal `invalid-api-key`; env produksi + redeploy belum dicoba |
 | `gh` CLI | tidak terpasang; PR dibuka manual lewat web GitHub |

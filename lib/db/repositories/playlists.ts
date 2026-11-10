@@ -6,13 +6,20 @@ export type PlaylistInput = {
   url: string;
   title: string;
   sortOrder: number;
+  moodId: string | null;
 };
 
-export async function listPlaylists(roomId: string) {
+export async function listPlaylists(roomId: string, moodId?: string | null) {
   return getDb()
     .select()
     .from(playlists)
-    .where(and(eq(playlists.roomId, roomId), isNull(playlists.deletedAt)))
+    .where(
+      and(
+        eq(playlists.roomId, roomId),
+        isNull(playlists.deletedAt),
+        moodId ? eq(playlists.moodId, moodId) : undefined,
+      ),
+    )
     .orderBy(asc(playlists.sortOrder), asc(playlists.createdAt));
 }
 

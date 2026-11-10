@@ -6,16 +6,25 @@ export const playlistSchema = z
     url: z.string().trim().min(1).max(300),
     title: z.string().trim().min(1).max(120),
     sortOrder: z.coerce.number().int().min(0).max(999).default(0),
+    moodId: z.string().uuid().or(z.literal("")).default(""),
   })
   .strict();
 
 export type PlaylistFields = z.infer<typeof playlistSchema>;
 
 /** URL di-kanonikkan tanpa `?si=` sebelum disimpan (PRD §8.1). */
-export function toPlaylistInput(
-  fields: PlaylistFields,
-): { url: string; title: string; sortOrder: number } | null {
+export function toPlaylistInput(fields: PlaylistFields): {
+  url: string;
+  title: string;
+  sortOrder: number;
+  moodId: string | null;
+} | null {
   const canonical = canonicalSpotifyPlaylist(fields.url);
   if (!canonical) return null;
-  return { url: canonical.url, title: fields.title, sortOrder: fields.sortOrder };
+  return {
+    url: canonical.url,
+    title: fields.title,
+    sortOrder: fields.sortOrder,
+    moodId: fields.moodId || null,
+  };
 }
