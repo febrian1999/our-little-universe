@@ -48,6 +48,12 @@ export const auditEntity = pgEnum("audit_entity", [
   "invite",
   "user",
   "setting",
+  "access_request",
+]);
+export const accessRequestStatus = pgEnum("access_request_status", [
+  "pending",
+  "approved",
+  "rejected",
 ]);
 
 // --- helper kolom audit -------------------------------------------------
@@ -100,6 +106,7 @@ export const invites = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     code: text("code").notNull(),
+    email: text("email"),
     role: userRole("role").notNull().default("guest"),
     active: boolean("active").notNull().default(true),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
@@ -114,6 +121,32 @@ export const invites = pgTable(
     uniqueIndex("invites_code_active_idx")
       .on(t.code)
       .where(sql`deleted_at is null`),
+    uniqueIndex("invites_email_pending_idx")
+      .on(t.email)
+      .where(sql`deleted_at is null and uses < max_uses`),
+  ],
+);
+
+export const accessRequests = pgTable(
+  "access_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    message: text("message"),
+    status: accessRequestStatus("status").notNull().default("pending"),
+    reason: text("reason"),
+    decidedBy: uuid("decided_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    ...auditable(),
+  },
+  (t) => [
+    index("access_requests_status_idx").on(t.status, t.createdAt),
+    uniqueIndex("access_requests_email_pending_idx")
+      .on(t.email)
+      .where(sql`deleted_at is null and status = 'pending'`),
   ],
 );
 

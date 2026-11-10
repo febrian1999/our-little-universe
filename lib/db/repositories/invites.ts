@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { invites, type userRole } from "@/lib/db/schema";
 import type { AuthProfile } from "./users";
@@ -31,10 +31,57 @@ export type RedeemedUser = {
   role: UserRole;
 };
 
+export async function listInvites() {
+  return getDb()
+    .select()
+    .from(invites)
+    .where(isNull(invites.deletedAt))
+    .orderBy(desc(invites.createdAt))
+    .limit(100);
+}
+
+/** Undangan baru. `code` dipakai di tautan; `email` mengikat penerima. */
+export async function createInvite(
+  input: {
+    email: string | null;
+    role: UserRole;
+    code: string;
+    expiresAt: Date | null;
+    maxUses: number;
+  },
+  actorId: string,
+) {
+  const [row] = await getDb()
+    .insert(invites)
+    .values({ ...input, createdBy: actorId, updatedBy: actorId })
+    .returning();
+  return row;
+}
+
+/** Cabut undangan = nonaktif + soft delete (PRD §4, tidak ada hard delete). */
+export async function revokeInvite(id: string, actorId: string) {
+  const now = new Date();
+  const [row] = await getDb()
+    .update(invites)
+    .set({
+      active: false,
+      deletedAt: now,
+      deletedBy: actorId,
+      updatedAt: now,
+      updatedBy: actorId,
+    })
+    .where(and(eq(invites.id, id), isNull(invites.deletedAt)))
+    .returning();
+  return row ?? null;
+}
+
 /**
  * Klaim undangan dalam satu statement (Neon HTTP tidak punya transaksi
  * interaktif). Cek kuota, kenaikan `uses`, upsert user, dan catatan
  * `invite_redeem` terjadi atomik. `null` = undangan tidak valid.
+ *
+ * `email` undangan (kalau diisi) harus sama dengan email yang login; undangan
+ * tanpa email = tautan bebas selama kuota belum habis.
  */
 export async function redeemInvite(
   code: string,
@@ -48,6 +95,7 @@ export async function redeemInvite(
         and active = true
         and (expires_at is null or expires_at > now())
         and uses < max_uses
+        and (email is null or lower(email) = lower(${profile.email}))
       for update
     ),
     bumped as (

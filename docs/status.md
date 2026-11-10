@@ -31,8 +31,9 @@ Satu milestone jalan setelah pemilik memberi izin.
 | M6 | dashboard, statistik 14 hari, history kunjungan/perubahan | selesai | `976a6aa` |
 | M7 | toggle gerbang (owner) + pencatatan `gate_open` | selesai | `5d5bc02` |
 | M8 | PWA installable, CSP mengikat, skip link | selesai | `38fc9fd` |
+| M9 | perbaikan auth produksi (jose v5 override + `serverExternalPackages`) | selesai | `8bef11f` |
+| M10 | permintaan akses + undangan ber-email + kelola pengguna (`/request-access`, `/admin/access`) | selesai | — |
 | — | `/admin/media` (galeri media read-only) | **belum** | — |
-| — | `/admin/access` (undangan + role) | **belum** | — |
 | — | deploy Vercel + PR `development` → `main` | **belum** | — |
 
 ---
@@ -50,7 +51,7 @@ Diuji pada `next start` lokal dengan permintaan HTTP sungguhan, bukan hanya baca
 | History | `/admin/history` menampilkan `gate_toggle` dan `gate_open` |
 | CSP | header penuh terkirim di `/login` dan `/admin` |
 | PWA | `/sw.js`, `/manifest.webmanifest`, `/icons/icon-192.png`, `/icons/icon-512.png`, `/apple-icon.png` → 200; `rel="manifest"` + `apple-touch-icon` ada di HTML |
-| Mutu | `typecheck` hijau, `lint` 0 warning, `test:run` **73 lulus / 16 file**, `next build` exit **0** |
+| Mutu | `typecheck` hijau, `lint` 0 warning, `test:run` **76 lulus / 16 file**, `next build` exit **0** |
 
 ---
 
@@ -63,6 +64,8 @@ Diuji pada `next start` lokal dengan permintaan HTTP sungguhan, bukan hanya baca
 | Login Google setelah CSP aktif | belum diuji ulang; `connect-src`/`frame-src` sudah memuat domain Firebase |
 | Install PWA di iPhone 13 / Android | butuh perangkat |
 | Editor tidak bisa toggle/role | DB baru punya satu user `owner`; butuh undangan dipakai dulu |
+| Alur permintaan akses ujung-ke-ujung | halaman + endpoint + migrasi ada, tetapi belum dijalankan dengan akun sungguhan di produksi |
+| Migrasi `0001` di Neon | SQL sudah digenerate, belum di-`db:migrate` (butuh `DATABASE_URL_UNPOOLED`) |
 | `api/upload/r2/presign`, `scripts/backup.ts` | kredensial R2 belum ada, jadi belum dibuat |
 | Deploy Vercel | pernah gagal `invalid-api-key`; env produksi + redeploy belum dicoba |
 | `gh` CLI | tidak terpasang; PR dibuka manual lewat web GitHub |
