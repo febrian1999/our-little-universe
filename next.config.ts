@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   cacheComponents: true,
   partialPrefetching: true,
+  serverExternalPackages: ["firebase-admin", "jwks-rsa", "jose"],
   experimental: {
     agentFeedback: true,
   },
