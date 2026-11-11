@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 const inputClass =
-  "w-full rounded-xl border border-neutral-300 px-3 py-2 text-base text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+  "w-full rounded-xl border border-pink-100/80 bg-white/90 px-3.5 py-2 text-base text-neutral-900 shadow-2xs transition focus-visible:border-pink-400 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent";
 
 export function Field({
   label,
@@ -22,7 +22,9 @@ export function Field({
 }) {
   return (
     <label className="text-sm text-neutral-700">
-      <span className="mb-1 block font-medium">{label}</span>
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-neutral-600">
+        {label}
+      </span>
       <input
         name={name}
         type={type}
@@ -49,7 +51,9 @@ export function TextArea({
 }) {
   return (
     <label className="text-sm text-neutral-700">
-      <span className="mb-1 block font-medium">{label}</span>
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-neutral-600">
+        {label}
+      </span>
       <textarea
         name={name}
         rows={rows}
@@ -73,7 +77,9 @@ export function Select({
 }) {
   return (
     <label className="text-sm text-neutral-700">
-      <span className="mb-1 block font-medium">{label}</span>
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-neutral-600">
+        {label}
+      </span>
       <select name={name} defaultValue={defaultValue} className={inputClass}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -91,7 +97,7 @@ export function Notice({ error, ok }: { error?: string; ok?: string }) {
     return (
       <p
         role="alert"
-        className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        className="mt-4 rounded-2xl border border-red-200/80 bg-red-50/90 px-4 py-3 text-sm font-medium text-red-700 shadow-2xs backdrop-blur-xs"
       >
         {error}
       </p>
@@ -99,8 +105,8 @@ export function Notice({ error, ok }: { error?: string; ok?: string }) {
   }
   if (ok) {
     return (
-      <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-        Tersimpan.
+      <p className="mt-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/90 px-4 py-3 text-sm font-medium text-emerald-700 shadow-2xs backdrop-blur-xs">
+        Tersimpan dengan sukses ✨
       </p>
     );
   }
@@ -109,7 +115,7 @@ export function Notice({ error, ok }: { error?: string; ok?: string }) {
 
 export function Card({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+    <div className="glass-panel rounded-2xl p-5">
       {children}
     </div>
   );

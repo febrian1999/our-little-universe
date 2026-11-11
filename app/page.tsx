@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { openGateAction } from "@/app/actions";
+import { AmbientSky } from "@/components/ambient-sky";
 import { SparklesIcon, StarIcon } from "@/components/ui/sparkles";
 import { getPrimaryChapter } from "@/lib/db/repositories/chapters";
 
@@ -10,8 +11,9 @@ export default function LandingPage() {
         aria-hidden
         className="ambient ambient-fairy"
       />
+      <AmbientSky />
 
-      <section className="glass-panel relative w-full max-w-md overflow-hidden rounded-[2rem] p-8 text-center sm:p-10">
+      <section className="glass-panel relative z-10 w-full max-w-md overflow-hidden rounded-[2.5rem] p-8 text-center shadow-[0_20px_50px_rgba(236,72,153,0.18)] sm:p-10">
         {/* Glow ambient halus di atas kartu */}
         <div
           aria-hidden
@@ -19,19 +21,22 @@ export default function LandingPage() {
         />
 
         <div className="relative flex flex-col items-center">
-          <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-100 to-amber-100 text-pink-500 shadow-sm ring-1 ring-white/80">
-            <SparklesIcon className="size-7" />
+          {/* Legacy ribbon badge */}
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-pink-500 px-4 py-1.5 text-xs font-semibold text-white shadow-xs">
+            <SparklesIcon className="size-3.5" />
+            <span>Princess × Guardian</span>
           </div>
 
-          <p className="text-xs font-semibold tracking-widest text-pink-500 uppercase">
-            A Safe Haven
-          </p>
+          {/* Castle bounce icon with drop-shadow */}
+          <div className="my-2 text-6xl select-none filter drop-shadow-[0_8px_12px_rgba(244,114,182,0.45)]">
+            🏰
+          </div>
 
-          <h1 className="mt-2 font-serif text-3xl font-normal tracking-tight text-neutral-900 sm:text-4xl">
+          <h1 className="mt-3 font-serif text-3xl font-medium tracking-tight text-[#be185d] sm:text-4xl">
             Our Little Universe
           </h1>
 
-          <p className="mt-3 text-sm leading-relaxed text-neutral-600 sm:text-base">
+          <p className="mt-3 text-sm leading-relaxed text-[#79677f] sm:text-base">
             Sebuah ruang kecil untuk cerita, foto, dan lagu yang hanya kita yang
             tahu. Kalau gerbangnya terbuka, masuklah pelan-pelan.
           </p>
